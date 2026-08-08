@@ -1,0 +1,96 @@
+{
+  "global": {
+    "files": "/src/**/*.*"
+  },
+  "dependencies": [
+    {
+      "url": "https://github.com/abapedia/steampunk-2305-api-intersect-702",
+      "folder": "/deps",
+      "files": "/src/**/*.*"
+    },
+    {
+      "url": "https://github.com/abap2UI5/abap2UI5",
+      "folder": "/abap2UI5",
+      "files": "/src/**/*.*"
+    }
+  ],
+  "syntax": {
+    "version": "v750",
+    "errorNamespace": "."
+  },
+  "rules": {
+    // --- correctness ---
+    "downport": true,
+    "begin_end_names": true,
+    "check_ddic": true,
+    "check_include": true,
+    "check_syntax": true,
+    "global_class": true,
+    "implement_methods": true,
+    "method_implemented_twice": true,
+    "parser_error": true,
+    "superclass_final": true,
+    "unknown_types": true,
+    "xml_consistency": true,
+    "unreachable_code": true,
+    "unused_variables": true,
+    "unused_types": true,
+    "unused_methods": true,
+    "identical_conditions": true,
+    "identical_contents": true,
+    "empty_statement": true,
+    "ambiguous_statement": true,
+    "obsolete_statement": true,
+    "commented_code": true,
+    "when_others_last": true,
+    "constructor_visibility_public": true,
+    "allowed_object_types": {
+      "allowed": ["CLAS", "DEVC", "INTF"]
+    },
+    // --- style ---
+    "exporting": true,
+    "omit_parameter_name": true,
+    "line_length": {
+      "length": 255
+    },
+    "definitions_top": true,
+    "contains_tab": true,
+    "whitespace_end": true,
+    "sequential_blank": {
+      "lines": 3
+    },
+    "max_one_statement": true,
+    "colon_missing_space": true,
+    "keyword_case": {
+      "style": "upper",
+      "ignoreExceptions": true,
+      "ignoreLowerClassImplmentationStatement": true,
+      "ignoreKeywords": []
+    },
+    "types_naming": {
+      "pattern": "^TY_"
+    },
+    "object_naming": {
+      "patternKind": "required",
+      "clas": "^Z2UI5_CL_",
+      "intf": "^Z2UI5_IF_"
+    },
+    "functional_writing": true,
+    "no_chained_assignment": true,
+    "names_no_dash": true,
+    "preferred_compare_operator": true,
+    "use_line_exists": true,
+    "prefer_is_not": true,
+    "avoid_use": {
+      "define": true,
+      "endselect": true,
+      "execSQL": true,
+      "kernelCall": true,
+      "communication": true,
+      "statics": true,
+      "systemCall": true,
+      "defaultKey": true,
+      "break": true
+    }
+  }
+}
