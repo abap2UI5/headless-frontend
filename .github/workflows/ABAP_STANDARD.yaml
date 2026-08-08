@@ -1,0 +1,25 @@
+name: ABAP_STANDARD
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ABAP_STANDARD-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ABAP_STANDARD:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+      with:
+        node-version: '22'
+        cache: 'npm'
+    - run: npm ci
+    - run: npx abaplint ./abaplint.jsonc

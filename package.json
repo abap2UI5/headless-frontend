@@ -1,0 +1,34 @@
+{
+  "name": "abap2ui5-test",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Test abap2UI5 apps in ABAP - a headless frontend simulator that speaks the abap2UI5 request/response protocol without a browser.",
+  "scripts": {
+    "lint": "abaplint ./abaplint.jsonc",
+    "lint:cloud": "abaplint .github/abaplint/abap_cloud.jsonc",
+    "lint:702": "abaplint .github/abaplint/abap_702.jsonc",
+    "syfixes": "find src -type f -name '*.abap' -exec sed -i -e 's/ RAISE EXCEPTION TYPE cx_sy_itab_line_not_found/ ASSERT 1 = 0/g' {} +",
+    "downport": "abaplint --fix .github/abaplint/abap_702.jsonc && npm run syfixes"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abap2UI5/test.git"
+  },
+  "keywords": [
+    "abap",
+    "abap2ui5",
+    "testing",
+    "abapunit"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/abap2UI5/test/issues"
+  },
+  "homepage": "https://github.com/abap2UI5/test#readme",
+  "devDependencies": {
+    "@abaplint/cli": "^2.120.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
