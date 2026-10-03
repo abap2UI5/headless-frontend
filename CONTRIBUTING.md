@@ -48,6 +48,31 @@ an unclosed tag.
 ## Tests
 
 Unit tests live in the class's `.clas.testclasses.abap` and use the simulator to
-drive real apps. Keep `RISK LEVEL` honest: a test that reaches
-`z2ui5_cl_core_srv_draft` writes to `z2ui5_t_01` and commits, which is not
-`HARMLESS`. See [ROADMAP.md](ROADMAP.md) stage 0.1.
+drive real apps. Keep `RISK LEVEL` honest: a test that reaches the shipped draft
+store writes to `z2ui5_t_01` and commits — and every app start runs the draft
+cleanup, sticky or not — which is not `HARMLESS`.
+
+- `ltcl_frontend_simulator` is `HARMLESS` because its `setup` installs the
+  in-memory store `ltd_draft_store` through `z2ui5_cl_ui5_srv_draft=>set_instance`
+  and its `teardown` restores the default. New tests that do not need the real
+  database go here.
+- `ltcl_frontend_simulator_db` is `DANGEROUS` and runs against `z2ui5_t_01`.
+  Pass every simulator to `track( )` after each roundtrip so `teardown` deletes
+  the drafts it created.
+
+### Running them without a system
+
+The tests run on the transpiled runtime abap2UI5 uses for its own suite (SQLite
+behind the database statements). In a throwaway clone of
+[abap2UI5](https://github.com/abap2UI5/abap2UI5):
+
+```sh
+npm ci
+cp -r <this repo>/src src/zz          # the objects of this repo as one more package
+npm run downport && npm run auto_transpile
+node node/output/index.mjs            # the whole suite - or a copy filtered to Z2UI5_CL_FRONTEND_SIM*
+```
+
+Never commit that clone or its output. A green transpiled run is not a
+substitute for running the tests on a system (see abap2UI5's `abap-check`
+skill for what the transpiler cannot see).
