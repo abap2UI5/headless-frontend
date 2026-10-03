@@ -22,6 +22,24 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
   PUBLIC SECTION.
 
+    "! One message the frontend would have shown - a toast or a message box.
+    "! roundtrip counts the roundtrips of this instance (1 = start( )), so a
+    "! test can tell the messages of the last click( ) from older ones.
+    "! type is the severity in the vocabulary agents and UIs share - success,
+    "! info, warning or error; method is the raw sap.m.MessageBox display
+    "! method the backend asked for (show for a toast).
+    TYPES:
+      BEGIN OF ty_s_message,
+        roundtrip TYPE i,
+        source    TYPE string,
+        type      TYPE string,
+        method    TYPE string,
+        text      TYPE string,
+        title     TYPE string,
+        details   TYPE string,
+      END OF ty_s_message.
+    TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH EMPTY KEY.
+
     "! Start an app - one roundtrip without an id, mirroring the browser's
     "! first POST with ?app_start=&lt;class name&gt;.
     "! @parameter app    | Global class name of the app to start (e.g. `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`).
@@ -72,10 +90,25 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         VALUE(result) TYPE string.
 
     "! Text of the last message toast or message box of the last response
-    "! (empty if the last roundtrip produced none).
+    "! (empty if the last roundtrip produced none) - the convenience
+    "! accessor over get_messages( ).
     METHODS get_message
       RETURNING
         VALUE(result) TYPE string.
+
+    "! Every message of this session, oldest first, with source (toast / box),
+    "! severity and roundtrip number.
+    "! @parameter only_last | abap_true: only the messages of the last roundtrip.
+    METHODS get_messages
+      IMPORTING
+        only_last     TYPE abap_bool DEFAULT abap_false
+      RETURNING
+        VALUE(result) TYPE ty_t_message.
+
+    "! Number of roundtrips this instance performed (start( ) is the first).
+    METHODS get_roundtrip
+      RETURNING
+        VALUE(result) TYPE i.
 
     "! Current draft id - the id the frontend would send with the next request.
     METHODS get_id
@@ -96,7 +129,8 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
     DATA mo_model     TYPE REF TO z2ui5_if_ajson.
     DATA mv_id        TYPE string.
     DATA mv_view_xml  TYPE string.
-    DATA mv_message   TYPE string.
+    DATA mt_message   TYPE ty_t_message.
+    DATA mv_roundtrip TYPE i.
     DATA mv_resp_json TYPE string.
 
     METHODS roundtrip
@@ -116,6 +150,13 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
     METHODS parse_response
       IMPORTING
         json TYPE string.
+
+    METHODS message_add
+      IMPORTING
+        source TYPE string
+        method TYPE string
+        text   TYPE string
+        opt    TYPE REF TO z2ui5_if_ajson OPTIONAL.
 
     METHODS conv_name_to_path
       IMPORTING
@@ -246,7 +287,7 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
   METHOD parse_response.
 
     mv_resp_json = json.
-    CLEAR mv_message.
+    mv_roundtrip = mv_roundtrip + 1.
 
     TRY.
         DATA(lo_resp) = CAST z2ui5_if_ajson( z2ui5_cl_ajson=>parse( json ) ).
@@ -271,8 +312,9 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
           lv_index = lv_index + 1.
         ENDDO.
 
-        " messages are app follow-up actions: [ MESSAGE_TOAST, show, text ]
-        " and [ MESSAGE_BOX, type, text ]
+        " messages are app follow-up actions, in the order the app queued
+        " them: [ MESSAGE_TOAST, show, text, opt? ] and
+        " [ MESSAGE_BOX, method, text, opt? ]
         lv_index = 1.
         DO.
           lv_path = |/S_FRONT/S_ACTION/T_CUSTOM/{ lv_index }|.
@@ -281,7 +323,12 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
           ENDIF.
           DATA(lv_target) = lo_resp->get_string( |{ lv_path }/1| ).
           IF lv_target = `MESSAGE_TOAST` OR lv_target = `MESSAGE_BOX`.
-            mv_message = lo_resp->get_string( |{ lv_path }/3| ).
+            DATA(lo_opt) = COND #( WHEN lo_resp->get_node_type( |{ lv_path }/4| ) = z2ui5_if_ajson_types=>node_type-object
+                                   THEN lo_resp->slice( |{ lv_path }/4| ) ).
+            message_add( source = COND #( WHEN lv_target = `MESSAGE_TOAST` THEN `toast` ELSE `box` )
+                         method = lo_resp->get_string( |{ lv_path }/2| )
+                         text   = lo_resp->get_string( |{ lv_path }/3| )
+                         opt    = lo_opt ).
           ENDIF.
           lv_index = lv_index + 1.
         ENDDO.
@@ -315,7 +362,56 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_message.
-    result = mv_message.
+
+    " the last message of the LAST roundtrip - empty when it produced none.
+    " READ TABLE, not a table expression in the condition: the 7.02 downport
+    " hoists the expression in front of the IF, where the guard no longer
+    " protects it from an empty table
+    READ TABLE mt_message INTO DATA(ls_message) INDEX lines( mt_message ).
+    IF sy-subrc = 0 AND ls_message-roundtrip = mv_roundtrip.
+      result = ls_message-text.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD get_messages.
+
+    IF only_last = abap_false.
+      result = mt_message.
+      RETURN.
+    ENDIF.
+
+    LOOP AT mt_message INTO DATA(ls_message) WHERE roundtrip = mv_roundtrip. "#EC CI_SORTSEQ
+      INSERT ls_message INTO TABLE result.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD get_roundtrip.
+    result = mv_roundtrip.
+  ENDMETHOD.
+
+  METHOD message_add.
+
+    DATA(ls_message) = VALUE ty_s_message( roundtrip = mv_roundtrip
+                                           source    = source
+                                           method    = to_lower( method )
+                                           text      = text ).
+
+    " sap.m.MessageBox display methods - a toast carries no severity
+    ls_message-type = SWITCH #( ls_message-method
+                                WHEN `error`   THEN `error`
+                                WHEN `warning` THEN `warning`
+                                WHEN `success` THEN `success`
+                                ELSE `info` ).
+
+    IF opt IS BOUND.
+      ls_message-title   = opt->get_string( `/title` ).
+      ls_message-details = opt->get_string( `/details` ).
+    ENDIF.
+
+    INSERT ls_message INTO TABLE mt_message.
+
   ENDMETHOD.
 
   METHOD get_id.
