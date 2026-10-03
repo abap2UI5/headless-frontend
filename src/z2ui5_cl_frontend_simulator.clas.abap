@@ -17,7 +17,11 @@
 "!
 "! set_value / click / get_value address the app by the names the app author
 "! already coded: the bound attribute name ( client-&gt;_bind( mv_name ) - model
-"! path /MV_NAME ) and the event id ( client-&gt;_event( `GREET` ) ).
+"! path /MV_NAME ) and the event id ( client-&gt;_event( `GREET` ) ). Values a
+"! browser sends as something other than text go through set_json( ) and its
+"! shorthands set_bool( ), set_row( ) and select_row( ); all of them queue an
+"! edit into the model of the layer it is made in, and click( ) sends the
+"! delta the frontend would build from it.
 "!
 "! The view layers are the five slots of the frontend: MAIN, the nested
 "! views NEST and NEST2 (inserted into MAIN, sharing its model), and the
@@ -144,24 +148,70 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
     "! Set a value into the model delta of the NEXT roundtrip - the equivalent
     "! of typing into a bound input. No roundtrip happens yet; the value is sent
-    "! on the following click( ).
+    "! on the following click( ) as a JSON string, the way an input hands it
+    "! over (see set_json( ) for where it goes and how it is sent).
     "! @parameter name   | Bound attribute / model path (e.g. `MV_NAME` or `/MS_DATA/FIELD`).
     "! @parameter value  | The value to send.
+    "! @parameter layer  | Optional: the layer typed into (default: the topmost open one).
     "! @parameter result | The simulator instance (for fluent chaining).
     METHODS set_value
       IMPORTING
         name          TYPE clike
         value         TYPE clike
+        layer         TYPE clike OPTIONAL
+      RETURNING
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+
+    "! Set a raw JSON value at a model path into the delta of the NEXT
+    "! roundtrip - what a two-way binding writes into the browser's model: a
+    "! CheckBox a boolean, a MultiComboBox an array of keys, a StepInput a
+    "! number.
+    "!
+    "! The edit goes into the model of the layer it is made in - the own copy
+    "! of an open popup or popover, else the MAIN model the nested views
+    "! share - and travels with the next click( ) fired from that layer.
+    "! The delta is built the way the frontend builds it
+    "! (Lib.buildDeltaFromPaths), from that model with every edit applied: a
+    "! table cell (/TAB/row/COL, nested /TAB/row/SUB/row/COL) as a row delta
+    "! TAB.__delta.row.COL, every other path - a scalar, a structure field,
+    "! an array, a cell of a table inside a structure - as the whole
+    "! top-level attribute.
+    "! @parameter path   | Model path as the frontend records it, array indices 0-based (e.g. `MV_FLAG`,
+    "!                     `/MS_DATA/T_POS/1/QTY`). Names are upper-cased, the leading / is optional.
+    "! @parameter json   | The value as JSON: `true`, `42`, `"text"`, `["A","B"]`, `{"F":1}` or `null`.
+    "! @parameter layer  | Optional: the layer the edit is made in (default: the topmost open one).
+    "! @parameter result | The simulator instance (for fluent chaining).
+    METHODS set_json
+      IMPORTING
+        path          TYPE clike
+        json          TYPE clike
+        layer         TYPE clike OPTIONAL
+      RETURNING
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+
+    "! Set a boolean into the delta of the NEXT roundtrip - a CheckBox or a
+    "! Switch, sent as JSON true / false like the browser sends it.
+    "! @parameter name   | Bound attribute / model path (e.g. `MV_ACTIVE`).
+    "! @parameter value  | abap_true sends true, anything else false.
+    "! @parameter layer  | Optional: the layer the edit is made in (default: the topmost open one).
+    "! @parameter result | The simulator instance (for fluent chaining).
+    METHODS set_bool
+      IMPORTING
+        name          TYPE clike
+        value         TYPE abap_bool DEFAULT abap_true
+        layer         TYPE clike     OPTIONAL
       RETURNING
         VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
 
     "! Set one cell of a bound table into the delta of the NEXT roundtrip - the
     "! equivalent of typing into an input of a table row. Sent the way the
-    "! frontend sends it, as a row delta (TABLE.__delta.row.COLUMN).
-    "! @parameter table  | Bound table attribute (e.g. `MT_ITEM`).
+    "! frontend sends it, as a row delta (TABLE.__delta.row.COLUMN) - or, for
+    "! a table inside a structure, with the whole structure.
+    "! @parameter table  | Bound table attribute (e.g. `MT_ITEM`, or `MS_DATA/T_POS`).
     "! @parameter row    | Row index, 1-based as in ABAP.
     "! @parameter column | Column name (e.g. `QTY`).
     "! @parameter value  | The value to send.
+    "! @parameter layer  | Optional: the layer the edit is made in (default: the topmost open one).
     "! @parameter result | The simulator instance (for fluent chaining).
     METHODS set_cell
       IMPORTING
@@ -169,20 +219,74 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         row           TYPE i
         column        TYPE clike
         value         TYPE clike
+        layer         TYPE clike OPTIONAL
+      RETURNING
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+
+    "! Set several cells of one table row into the delta of the NEXT
+    "! roundtrip - every member of a JSON object is one cell, typed in column
+    "! by column, sent as one row delta.
+    "! @parameter table  | Bound table attribute (e.g. `MT_ITEM`).
+    "! @parameter row    | Row index, 1-based as in ABAP.
+    "! @parameter json   | A JSON object, column name to value (e.g. `{"QTY":3,"NAME":"Pen"}`).
+    "! @parameter layer  | Optional: the layer the edit is made in (default: the topmost open one).
+    "! @parameter result | The simulator instance (for fluent chaining).
+    METHODS set_row
+      IMPORTING
+        table         TYPE clike
+        row           TYPE i
+        json          TYPE clike
+        layer         TYPE clike OPTIONAL
+      RETURNING
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+
+    "! Select or deselect a table row - what a MultiSelect / SingleSelect
+    "! table writes into the column its items bind selected to: a boolean
+    "! cell, sent as a row delta.
+    "! @parameter table    | Bound table attribute (e.g. `MT_ITEM`).
+    "! @parameter row      | Row index, 1-based as in ABAP.
+    "! @parameter column   | The column the items bind selected to (e.g. `SELKZ`).
+    "! @parameter selected | abap_true selects, abap_false deselects.
+    "! @parameter layer    | Optional: the layer the edit is made in (default: the topmost open one).
+    "! @parameter result   | The simulator instance (for fluent chaining).
+    METHODS select_row
+      IMPORTING
+        table         TYPE clike
+        row           TYPE i
+        column        TYPE clike
+        selected      TYPE abap_bool DEFAULT abap_true
+        layer         TYPE clike     OPTIONAL
+      RETURNING
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+
+    "! Close a layer in the browser only - what a frontend event does
+    "! (_event_client( cs_event-popup_close ), the VIEW_SLOTS destroy action):
+    "! no roundtrip, the backend is not told. The layer and the unsent edits
+    "! of its model are gone; get_layers( ) and get_state( ) reflect it. A
+    "! layer that is not open is left as it is, as on the frontend.
+    "! @parameter layer  | A z2ui5_if_client=>cs_view value (POPUP, POPOVER, NEST, NEST2, MAIN).
+    "! @parameter result | The simulator instance (for fluent chaining).
+    METHODS close_layer
+      IMPORTING
+        layer         TYPE clike
       RETURNING
         VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
 
     "! Fire an event - the equivalent of clicking a button. Sends the pending
-    "! model delta together with the event and parses the response. With
-    "! set_check_events( ) on, an event that is not wired in the active layer
-    "! raises instead (see check_event_exists( )).
+    "! edits of the firing layer's model together with the event and parses
+    "! the response; edits made in another layer's model stay pending. With
+    "! set_check_events( ) on, an event that is not wired in the firing layer
+    "! raises instead (see check_event_exists( )), and so does an event of the
+    "! MAIN view while a dialog is open.
     "! @parameter event  | Event id as registered via client->_event( ).
     "! @parameter t_arg  | Optional event arguments (client->get_event_arg( )).
+    "! @parameter layer  | Optional: the layer whose view fires it (default: the topmost open one).
     "! @parameter result | The simulator instance (for fluent chaining).
     METHODS click
       IMPORTING
         event         TYPE clike
         t_arg         TYPE string_table OPTIONAL
+        layer         TYPE clike        OPTIONAL
       RETURNING
         VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
 
@@ -205,15 +309,21 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
     "! control tree: visibility and enablement are not evaluated, and events
     "! fired by timers or keyboard shortcuts are not wired in a view.
     "! @parameter event | Event id.
+    "! @parameter layer | Optional: a z2ui5_if_client=>cs_view value instead of the active layer.
     METHODS check_event_exists
       IMPORTING
         event         TYPE clike
+        layer         TYPE clike OPTIONAL
       RETURNING
         VALUE(result) TYPE abap_bool.
 
-    "! The events wired in the active layer (see check_event_exists( )), in
-    "! view order, each once.
+    "! The events wired in the active layer (see check_event_exists( )), or
+    "! in the given one, in view order, each once. MAIN, NEST and NEST2 answer
+    "! the main view together with its nested views.
+    "! @parameter layer | Optional: a z2ui5_if_client=>cs_view value.
     METHODS get_events
+      IMPORTING
+        layer         TYPE clike OPTIONAL
       RETURNING
         VALUE(result) TYPE string_table.
 
@@ -259,7 +369,8 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
     "! Read a value from the model of the topmost open layer (or the given
     "! one), falling back to the last model the server sent. Reflects the
-    "! server's model - it is not an echo of set_value( ).
+    "! model the layer holds - what the server sent, plus the values that
+    "! went out with a roundtrip - not an echo of a pending set_value( ).
     "! @parameter name  | Bound attribute / model path (e.g. `MV_NAME`).
     "! @parameter layer | Optional: a z2ui5_if_client=>cs_view value.
     METHODS get_value
@@ -332,6 +443,12 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RETURNING
         VALUE(result) TYPE string.
 
+    "! Raw request JSON of the last roundtrip - also of one that failed -
+    "! with the model delta as it went out (for debugging / assertions).
+    METHODS get_request_json
+      RETURNING
+        VALUE(result) TYPE string.
+
   PROTECTED SECTION.
 
   PRIVATE SECTION.
@@ -346,8 +463,28 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         t_layer    TYPE ty_t_layer,
       END OF ty_s_state.
 
+    "! One edit not sent yet: the model it was made in (MAIN, POPUP or
+    "! POPOVER), the model path (array indices 0-based) and the value.
+    TYPES:
+      BEGIN OF ty_s_edit,
+        model TYPE string,
+        path  TYPE string,
+        val   TYPE REF TO z2ui5_if_ajson,
+      END OF ty_s_edit.
+    TYPES ty_t_edit TYPE STANDARD TABLE OF ty_s_edit WITH EMPTY KEY.
+
+    "! One row step of a table edit path (Lib.js parseDeltaSteps): the row,
+    "! the field, and whether the field is the edited leaf or a nested table.
+    TYPES:
+      BEGIN OF ty_s_step,
+        row   TYPE string,
+        field TYPE string,
+        leaf  TYPE abap_bool,
+      END OF ty_s_step.
+    TYPES ty_t_step TYPE STANDARD TABLE OF ty_s_step WITH EMPTY KEY.
+
     DATA mo_handler      TYPE REF TO z2ui5_cl_ui5_handler.
-    DATA mo_pending      TYPE REF TO z2ui5_if_ajson.
+    DATA mt_edit         TYPE ty_t_edit.
     DATA mv_id           TYPE string.
     DATA mv_app          TYPE string.
     DATA mv_model_last   TYPE string.
@@ -358,13 +495,15 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
     DATA mv_roundtrip    TYPE i.
     DATA mv_check_events TYPE abap_bool.
     DATA mv_resp_json    TYPE string.
+    DATA mv_req_json     TYPE string.
 
     METHODS roundtrip
       IMPORTING
         event  TYPE clike        OPTIONAL
         search TYPE clike        OPTIONAL
         hash   TYPE clike        OPTIONAL
-        t_arg  TYPE string_table OPTIONAL.
+        t_arg  TYPE string_table OPTIONAL
+        model  TYPE string       DEFAULT z2ui5_if_client=>cs_view-main.
 
     METHODS build_request
       IMPORTING
@@ -372,6 +511,76 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         search        TYPE clike        OPTIONAL
         hash          TYPE clike        OPTIONAL
         t_arg         TYPE string_table OPTIONAL
+        delta         TYPE REF TO z2ui5_if_ajson OPTIONAL
+      RETURNING
+        VALUE(result) TYPE string.
+
+    METHODS layer_check
+      IMPORTING
+        layer         TYPE clike
+      RETURNING
+        VALUE(result) TYPE string.
+
+    METHODS model_key
+      IMPORTING
+        layer         TYPE clike
+      RETURNING
+        VALUE(result) TYPE string.
+
+    METHODS edit_add
+      IMPORTING
+        path  TYPE clike
+        val   TYPE REF TO z2ui5_if_ajson
+        layer TYPE clike.
+
+    METHODS edits_prune.
+
+    METHODS delta_build
+      IMPORTING
+        model TYPE string
+      EXPORTING
+        delta TYPE REF TO z2ui5_if_ajson
+        data  TYPE string.
+
+    METHODS delta_copy
+      IMPORTING
+        from      TYPE REF TO z2ui5_if_ajson
+        from_path TYPE string
+        to        TYPE REF TO z2ui5_if_ajson
+        to_path   TYPE string
+      RAISING
+        z2ui5_cx_ajson_error.
+
+    CLASS-METHODS delta_steps
+      IMPORTING
+        t_seg         TYPE string_table
+      RETURNING
+        VALUE(result) TYPE ty_t_step.
+
+    CLASS-METHODS json_path
+      IMPORTING
+        json          TYPE REF TO z2ui5_if_ajson
+        path          TYPE string
+      RETURNING
+        VALUE(result) TYPE string.
+
+    CLASS-METHODS json_parse_value
+      IMPORTING
+        json          TYPE clike
+      RETURNING
+        VALUE(result) TYPE REF TO z2ui5_if_ajson.
+
+    CLASS-METHODS json_of_string
+      IMPORTING
+        value         TYPE clike
+      RETURNING
+        VALUE(result) TYPE REF TO z2ui5_if_ajson.
+
+    CLASS-METHODS row_path
+      IMPORTING
+        table         TYPE clike
+        row           TYPE i
+        column        TYPE clike
       RETURNING
         VALUE(result) TYPE string.
 
@@ -448,7 +657,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
     METHODS restore_draft.
 
-    METHODS conv_name_to_path
+    CLASS-METHODS conv_name_to_path
       IMPORTING
         name          TYPE clike
       RETURNING
@@ -551,63 +760,418 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
 
   METHOD set_value.
 
-    IF mo_pending IS NOT BOUND.
-      mo_pending = CAST z2ui5_if_ajson( z2ui5_cl_ajson=>create_empty( ) ).
+    edit_add( path  = name
+              val   = json_of_string( value )
+              layer = layer ).
+    result = me.
+
+  ENDMETHOD.
+
+  METHOD set_json.
+
+    DATA lv_json TYPE string.
+
+    DATA(lo_val) = json_parse_value( json ).
+    IF lo_val IS NOT BOUND.
+      lv_json = json.
+      RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
+        EXPORTING val = |SET_JSON_INVALID - the value for { path } is no JSON value: { lv_json }|.
     ENDIF.
 
-    TRY.
-        mo_pending->set( iv_path         = conv_name_to_path( name )
-                         iv_val          = value
-                         iv_ignore_empty = abap_false ).
-      CATCH cx_root INTO DATA(lx).
-        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
-    ENDTRY.
-
+    edit_add( path  = path
+              val   = lo_val
+              layer = layer ).
     result = me.
+
+  ENDMETHOD.
+
+  METHOD set_bool.
+
+    result = set_json( path  = name
+                       json  = COND string( WHEN value = abap_true THEN `true` ELSE `false` )
+                       layer = layer ).
 
   ENDMETHOD.
 
   METHOD set_cell.
 
-    IF row < 1.
+    edit_add( path  = row_path( table  = table
+                                row    = row
+                                column = column )
+              val   = json_of_string( value )
+              layer = layer ).
+    result = me.
+
+  ENDMETHOD.
+
+  METHOD set_row.
+
+    DATA lv_json TYPE string.
+    lv_json = json.
+
+    DATA(lo_row) = json_parse_value( json ).
+    IF lo_row IS NOT BOUND OR lo_row->get_node_type( `/` ) <> z2ui5_if_ajson_types=>node_type-object.
       RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
-        EXPORTING val = |SET_CELL_ROW_INVALID - row { row } of { table }, rows count from 1|.
+        EXPORTING val = |SET_ROW_NO_OBJECT - the row { row } of { table } takes a JSON object of column values, not: { lv_json }|.
     ENDIF.
 
-    IF mo_pending IS NOT BOUND.
-      mo_pending = CAST z2ui5_if_ajson( z2ui5_cl_ajson=>create_empty( ) ).
+    " every column is one edit, the way a user types a row in cell by cell -
+    " the paths are checked before the first edit is queued
+    DATA(lt_column) = lo_row->members( `/` ).
+    DATA(lt_path) = VALUE string_table( ).
+    LOOP AT lt_column INTO DATA(lv_column).
+      INSERT row_path( table  = table
+                       row    = row
+                       column = lv_column ) INTO TABLE lt_path.
+    ENDLOOP.
+    LOOP AT lt_column INTO lv_column.
+      READ TABLE lt_path INTO DATA(lv_path) INDEX sy-tabix.
+      edit_add( path  = lv_path
+                val   = lo_row->slice( |/{ lv_column }| )
+                layer = layer ).
+    ENDLOOP.
+    result = me.
+
+  ENDMETHOD.
+
+  METHOD select_row.
+
+    result = set_json( path  = row_path( table  = table
+                                         row    = row
+                                         column = column )
+                       json  = COND string( WHEN selected = abap_true THEN `true` ELSE `false` )
+                       layer = layer ).
+
+  ENDMETHOD.
+
+  METHOD close_layer.
+
+    DATA(lv_layer) = layer_check( layer ).
+
+    " the frontend tears the slot down (actions/Slots, VIEW_SLOTS destroy)
+    " and the model of a standalone layer dies with it - its unsent edits too
+    layer_destroy( lv_layer ).
+    IF lv_layer = z2ui5_if_client=>cs_view-main.
+      DELETE mt_edit WHERE model = z2ui5_if_client=>cs_view-main. "#EC CI_SORTSEQ
     ENDIF.
-
-    " the frontend's row delta (Lib.buildDeltaFromPaths): row keys are the
-    " 0-based model indices, the backend adds one (srv_model delta_row_index)
-    DATA(lv_row) = row - 1.
-    DATA(lv_path) = |{ conv_name_to_path( table ) }/__delta/{ lv_row }/{ to_upper( condense( column ) ) }|.
-
-    TRY.
-        mo_pending->set( iv_path         = lv_path
-                         iv_val          = value
-                         iv_ignore_empty = abap_false ).
-      CATCH cx_root INTO DATA(lx).
-        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
-    ENDTRY.
-
+    edits_prune( ).
     result = me.
 
   ENDMETHOD.
 
   METHOD click.
 
-    IF mv_check_events = abap_true AND check_event_exists( event ) = abap_false.
-      RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
-        EXPORTING
-          val = |EVENT_NOT_WIRED - event { event } is not wired in layer { layer_top( ) }; | &&
-                |wired: { concat_lines_of( table = get_events( )
-                                           sep   = `, ` ) }|.
+    DATA(lv_model) = model_key( layer ).
+
+    IF mv_check_events = abap_true.
+      " a dialog is modal: nothing behind it can be clicked
+      IF lv_model = z2ui5_if_client=>cs_view-main
+          AND line_exists( mt_layer[ layer = z2ui5_if_client=>cs_view-popup ] ). "#EC CI_SORTSEQ
+        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
+          EXPORTING val = |EVENT_NOT_REACHABLE - event { event } of the main view cannot be clicked while a popup is open|.
+      ENDIF.
+      IF check_event_exists( event = event
+                             layer = layer ) = abap_false.
+        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
+          EXPORTING
+            val = |EVENT_NOT_WIRED - event { event } is not wired in layer { COND string( WHEN layer IS NOT INITIAL
+                                                                                         THEN to_upper( layer )
+                                                                                         ELSE layer_top( ) ) }; | &&
+                  |wired: { concat_lines_of( table = get_events( layer )
+                                             sep   = `, ` ) }|.
+      ENDIF.
     ENDIF.
 
     roundtrip( event = event
-               t_arg = t_arg ).
+               t_arg = t_arg
+               model = lv_model ).
     result = me.
+
+  ENDMETHOD.
+
+  METHOD layer_check.
+
+    " one of the five view slots, upper case
+    DATA lv_layer TYPE string.
+    lv_layer = layer.
+    lv_layer = condense( lv_layer ).
+    result = to_upper( lv_layer ).
+    IF result <> z2ui5_if_client=>cs_view-main
+        AND result <> z2ui5_if_client=>cs_view-nested
+        AND result <> z2ui5_if_client=>cs_view-nested2
+        AND result <> z2ui5_if_client=>cs_view-popup
+        AND result <> z2ui5_if_client=>cs_view-popover.
+      RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
+        EXPORTING val = |LAYER_UNKNOWN - { lv_layer } is no view layer; layers: MAIN, NEST, NEST2, POPUP, POPOVER|.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD model_key.
+
+    " the model a layer edits and sends: a popup and a popover own one, the
+    " nested views share the MAIN model (View1 _pickModelForRoundtrip)
+    IF layer IS INITIAL.
+      result = layer_top( ).
+    ELSE.
+      result = layer_check( layer ).
+      " MAIN is always addressable - a resumed session without state has
+      " the draft's model but no layer
+      IF result <> z2ui5_if_client=>cs_view-main AND NOT line_exists( mt_layer[ layer = result ] ). "#EC CI_SORTSEQ
+        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
+          EXPORTING val = |LAYER_NOT_OPEN - layer { result } is not open; open: { layer_top( ) }|.
+      ENDIF.
+    ENDIF.
+
+    IF result <> z2ui5_if_client=>cs_view-popup AND result <> z2ui5_if_client=>cs_view-popover.
+      result = z2ui5_if_client=>cs_view-main.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD edit_add.
+
+    " the path as the frontend records it (/A/0/B), from the names an app
+    " author wrote - upper case, empty segments dropped
+    SPLIT conv_name_to_path( path ) AT `/` INTO TABLE DATA(lt_seg).
+    DELETE lt_seg WHERE table_line IS INITIAL.
+    IF lt_seg IS INITIAL.
+      RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
+        EXPORTING val = `SET_PATH_EMPTY - a model path names at least the bound attribute`.
+    ENDIF.
+    DATA(lv_path) = |/{ concat_lines_of( table = lt_seg
+                                         sep   = `/` ) }|.
+
+    DATA(lv_model) = model_key( layer ).
+
+    " a later edit of the same path replaces the earlier one and is applied
+    " after every edit before it - the order the browser's model saw them in
+    DELETE mt_edit WHERE model = lv_model AND path = lv_path. "#EC CI_SORTSEQ
+    INSERT VALUE #( model = lv_model
+                    path  = lv_path
+                    val   = val ) INTO TABLE mt_edit.
+
+  ENDMETHOD.
+
+  METHOD edits_prune.
+
+    " the model of a closed popup or popover is gone, and its edits with it
+    IF NOT line_exists( mt_layer[ layer = z2ui5_if_client=>cs_view-popup ] ). "#EC CI_SORTSEQ
+      DELETE mt_edit WHERE model = z2ui5_if_client=>cs_view-popup. "#EC CI_SORTSEQ
+    ENDIF.
+    IF NOT line_exists( mt_layer[ layer = z2ui5_if_client=>cs_view-popover ] ). "#EC CI_SORTSEQ
+      DELETE mt_edit WHERE model = z2ui5_if_client=>cs_view-popover. "#EC CI_SORTSEQ
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD delta_build.
+
+    DATA lt_path TYPE string_table.
+    DATA lt_whole TYPE string_table.
+    DATA lv_attr TYPE string.
+    DATA lo_data TYPE REF TO z2ui5_if_ajson.
+
+    CLEAR: delta, data.
+    LOOP AT mt_edit INTO DATA(ls_edit) WHERE model = model. "#EC CI_SORTSEQ
+      INSERT ls_edit-path INTO TABLE lt_path.
+    ENDLOOP.
+    IF lt_path IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " the model the firing layer holds, with every edit applied - the
+    " browser writes an edit into its model the moment it happens, and
+    " builds the delta from that model (View1 eB, Lib.buildDeltaFromPaths)
+    DATA(lv_model) = model_of_layer( model ).
+    IF lv_model IS INITIAL AND model = z2ui5_if_client=>cs_view-main.
+      lv_model = mv_model_last.
+    ENDIF.
+
+    TRY.
+        IF lv_model IS INITIAL.
+          lo_data = z2ui5_cl_ajson=>create_empty( ).
+        ELSE.
+          lo_data = z2ui5_cl_ajson=>parse( lv_model ).
+        ENDIF.
+        LOOP AT mt_edit INTO ls_edit WHERE model = model. "#EC CI_SORTSEQ
+          lo_data->set( iv_path         = json_path( json = lo_data
+                                                     path = ls_edit-path )
+                        iv_val          = ls_edit-val
+                        iv_ignore_empty = abap_false ).
+        ENDLOOP.
+        data = lo_data->stringify( ).
+
+        delta = z2ui5_cl_ajson=>create_empty( ).
+        LOOP AT lt_path INTO DATA(lv_path).
+          SPLIT lv_path AT `/` INTO TABLE DATA(lt_seg).
+          DELETE lt_seg WHERE table_line IS INITIAL.
+          READ TABLE lt_seg INTO lv_attr INDEX 1.
+          DELETE lt_seg INDEX 1.
+          DATA(lv_attr_path) = |/{ lv_attr }|.
+
+          DATA(lt_step) = delta_steps( lt_seg ).
+          IF lt_step IS INITIAL.
+            " a scalar, a structure, an array, a table inside a structure:
+            " the whole attribute - a superset of every delta of it
+            delta_copy( from      = lo_data
+                        from_path = lv_attr_path
+                        to        = delta
+                        to_path   = lv_attr_path ).
+            INSERT lv_attr_path INTO TABLE lt_whole.
+            CONTINUE.
+          ENDIF.
+          IF line_exists( lt_whole[ table_line = lv_attr_path ] ). "#EC CI_SORTSEQ
+            CONTINUE.
+          ENDIF.
+
+          " a table cell: { TAB: { __delta: { row: { COL: value } } } },
+          " one level deeper per nested table
+          DATA(lv_node) = lv_attr_path.
+          DATA(lv_model_path) = lv_attr_path.
+          LOOP AT lt_step INTO DATA(ls_step).
+            DATA(lv_field) = |{ lv_node }/__delta/{ ls_step-row }/{ ls_step-field }|.
+            lv_model_path = |{ lv_model_path }/{ ls_step-row }/{ ls_step-field }|.
+            IF ls_step-leaf = abap_true.
+              " the leaf replaces a nested delta queued for the same field
+              delta_copy( from      = lo_data
+                          from_path = json_path( json = lo_data
+                                                 path = lv_model_path )
+                          to        = delta
+                          to_path   = lv_field ).
+              INSERT lv_field INTO TABLE lt_whole.
+              EXIT.
+            ENDIF.
+            " a whole sub-table queued by another path covers this edit
+            IF line_exists( lt_whole[ table_line = lv_field ] ). "#EC CI_SORTSEQ
+              EXIT.
+            ENDIF.
+            lv_node = lv_field.
+          ENDLOOP.
+        ENDLOOP.
+
+      CATCH cx_root INTO DATA(lx).
+        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD delta_copy.
+
+    " a value the model does not hold is undefined in the browser - the key
+    " is left out of the delta
+    DATA(lo_val) = from->slice( from_path ).
+    IF lo_val IS BOUND.
+      to->set( iv_path         = to_path
+               iv_val          = lo_val
+               iv_ignore_empty = abap_false ).
+    ELSE.
+      to->delete( to_path ).
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD delta_steps.
+
+    " Lib.js parseDeltaSteps: row/field pairs, a numeric row followed by a
+    " non-numeric field; the last field is the leaf, every other one a
+    " nested table. Any other shape answers no steps
+    DATA lv_row TYPE string.
+    DATA lv_field TYPE string.
+    DATA lv_next TYPE string.
+    DATA lv_index TYPE i VALUE 1.
+    DATA lv_index_field TYPE i.
+
+    DATA(lv_count) = lines( t_seg ).
+    WHILE lv_index <= lv_count.
+      CLEAR: lv_row, lv_field, lv_next.
+      READ TABLE t_seg INTO lv_row INDEX lv_index.
+      lv_index_field = lv_index + 1.
+      READ TABLE t_seg INTO lv_field INDEX lv_index_field.
+      IF lv_row IS INITIAL OR lv_row CN `0123456789` OR lv_field IS INITIAL OR lv_field CO `0123456789`.
+        CLEAR result.
+        RETURN.
+      ENDIF.
+      lv_index = lv_index + 2.
+      READ TABLE t_seg INTO lv_next INDEX lv_index.
+      IF sy-subrc <> 0 OR lv_next CN `0123456789`.
+        INSERT VALUE #( row   = lv_row
+                        field = lv_field
+                        leaf  = abap_true ) INTO TABLE result.
+        RETURN.
+      ENDIF.
+      INSERT VALUE #( row   = lv_row
+                      field = lv_field ) INTO TABLE result.
+    ENDWHILE.
+    CLEAR result.
+
+  ENDMETHOD.
+
+  METHOD json_path.
+
+    " a model path counts array indices from 0, an ajson path from 1
+    DATA lv_index TYPE i.
+
+    SPLIT path AT `/` INTO TABLE DATA(lt_seg).
+    DELETE lt_seg WHERE table_line IS INITIAL.
+    LOOP AT lt_seg INTO DATA(lv_seg).
+      DATA(lv_parent) = COND string( WHEN result IS INITIAL THEN `/` ELSE result ).
+      IF lv_seg CO `0123456789` AND json->get_node_type( lv_parent ) = z2ui5_if_ajson_types=>node_type-array.
+        lv_index = lv_seg.
+        lv_index = lv_index + 1.
+        lv_seg = |{ lv_index }|.
+      ENDIF.
+      result = |{ result }/{ lv_seg }|.
+    ENDLOOP.
+    IF result IS INITIAL.
+      result = `/`.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD json_parse_value.
+
+    " any JSON value, a scalar included - wrapped, so the parser always
+    " reads an object; unbound when it is none
+    DATA lv_json TYPE string.
+    lv_json = json.
+    TRY.
+        DATA(lo_wrap) = z2ui5_cl_ajson=>parse( |\{"v":{ lv_json }\}| ).
+        IF lines( lo_wrap->members( `/` ) ) = 1.
+          result = lo_wrap->slice( `/v` ).
+        ENDIF.
+      CATCH cx_root.
+        CLEAR result.
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD json_of_string.
+
+    DATA lv_value TYPE string.
+    lv_value = value.
+    TRY.
+        result = z2ui5_cl_ajson=>create_empty( ).
+        result->set( iv_path         = `/`
+                     iv_val          = lv_value
+                     iv_ignore_empty = abap_false ).
+      CATCH cx_root INTO DATA(lx).
+        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD row_path.
+
+    DATA lv_column TYPE string.
+
+    " the frontend's model path of a cell: rows count from 0 there
+    IF row < 1.
+      RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
+        EXPORTING val = |SET_CELL_ROW_INVALID - row { row } of { table }, rows count from 1|.
+    ENDIF.
+    lv_column = column.
+    result = |{ conv_name_to_path( table ) }/{ row - 1 }/{ condense( lv_column ) }|.
 
   ENDMETHOD.
 
@@ -620,10 +1184,15 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
 
   METHOD roundtrip.
 
+    delta_build( EXPORTING model = model
+                 IMPORTING delta = DATA(lo_delta)
+                           data  = DATA(lv_data) ).
     DATA(lv_request) = build_request( event  = event
                                       search = search
                                       hash   = hash
-                                      t_arg  = t_arg ).
+                                      t_arg  = t_arg
+                                      delta  = lo_delta ).
+    mv_req_json = lv_request.
 
     " Reuse the handler for sticky apps, create a fresh one otherwise -
     " the same distinction z2ui5_cl_ui5_http_handler=>_http_post makes. Draft
@@ -662,8 +1231,24 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
         CLEAR mo_handler.
     ENDTRY.
 
+    " the values that went out stay in the model of the layer that sent them,
+    " as in the browser - a response that carries no model (the backend's
+    " is unchanged against what the client holds) leaves them there
+    IF lv_data IS NOT INITIAL.
+      READ TABLE mt_layer REFERENCE INTO DATA(lr_layer) WITH KEY layer = model. "#EC CI_SORTSEQ
+      IF sy-subrc = 0.
+        lr_layer->model = lv_data.
+      ELSEIF model = z2ui5_if_client=>cs_view-main.
+        mv_model_last = lv_data.
+      ENDIF.
+    ENDIF.
+
     parse_response( ls_response-body ).
-    CLEAR mo_pending.
+
+    " the sent edits are done; the edits of another model wait for an event
+    " of their own layer - as long as that layer is open
+    DELETE mt_edit WHERE model = model. "#EC CI_SORTSEQ
+    edits_prune( ).
 
   ENDMETHOD.
 
@@ -702,9 +1287,9 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
                        iv_val  = t_arg ).
         ENDIF.
 
-        IF mo_pending IS BOUND AND mo_pending->is_empty( ) = abap_false.
+        IF delta IS BOUND.
           lo_req->set( iv_path = `/value/MODEL`
-                       iv_val  = mo_pending ).
+                       iv_val  = delta ).
         ENDIF.
 
         result = lo_req->stringify( ).
@@ -1117,7 +1702,7 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
 
     DATA lv_event TYPE string.
     lv_event = event.
-    DATA(lt_event) = get_events( ).
+    DATA(lt_event) = get_events( layer ).
     result = xsdbool( line_exists( lt_event[ table_line = lv_event ] ) ). "#EC CI_SORTSEQ
 
   ENDMETHOD.
@@ -1127,7 +1712,10 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
     " a dialog is modal and a popover sits on top of whatever opened it: the
     " user reaches the topmost layer only. The MAIN view comes with the
     " nested views inserted into it
-    DATA(lv_top) = layer_top( ).
+    DATA(lv_top) = COND string( WHEN layer IS INITIAL THEN layer_top( ) ELSE layer_check( layer ) ).
+    IF lv_top = z2ui5_if_client=>cs_view-nested OR lv_top = z2ui5_if_client=>cs_view-nested2.
+      lv_top = z2ui5_if_client=>cs_view-main.
+    ENDIF.
     DATA(lt_layer) = COND string_table(
         WHEN lv_top = z2ui5_if_client=>cs_view-main
         THEN VALUE #( ( z2ui5_if_client=>cs_view-main )
@@ -1280,6 +1868,10 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
 
   METHOD get_response_json.
     result = mv_resp_json.
+  ENDMETHOD.
+
+  METHOD get_request_json.
+    result = mv_req_json.
   ENDMETHOD.
 
   METHOD conv_name_to_path.

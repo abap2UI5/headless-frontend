@@ -79,8 +79,24 @@ main display played as a way back. Read-only — nothing is navigated.
 ### 2.1 Table deltas — **done**
 
 `set_cell( table row column value )` sends the frontend's row delta
-(`TAB.__delta.{row}.{col}`, `Lib.buildDeltaFromPaths`). A `set_row( )` that
-sends a whole row is still open.
+(`TAB.__delta.{row}.{col}`, `Lib.buildDeltaFromPaths`), `set_row( )` several
+cells of one row, `select_row( )` the boolean a selectable table writes into
+its rows. Nested tables get one `__delta` level per table.
+
+### 2.1b Typed edits — **done**
+
+Asked for by the [agent addon](https://github.com/abap2UI5-addons/agent),
+which had to refuse booleans as anything but `X` / space, MultiComboBox
+arrays and edits inside a structure that also holds a table.
+`set_json( path json )` queues a raw JSON value at a model path (`set_bool( )`
+is the boolean shorthand), and every setter shares its path logic: an edit
+goes into the model of the layer it is made in, and `click( )` sends the delta
+`Lib.buildDeltaFromPaths` builds from that model with the edits applied — a
+row delta for a table cell, the whole top-level attribute for everything else.
+Edits of another layer's model wait for an event of their own layer (an
+optional `layer` on every setter and on `click( )`), and what went out stays
+in the layer's model, as in the browser. `get_request_json( )` shows the
+request as it went out.
 
 ### 2.2 Injectable frontend `CONFIG` — **open**
 
@@ -128,6 +144,10 @@ drives apps over MCP: every tool call is a separate HTTP request.
 - `get_app( )`, `get_layers( )` (XML and model per layer), `get_messages( )`,
   `get_actions( )` and `get_events( )` are what the agent's screen snapshot is
   built from.
+- `close_layer( layer )` closes a layer the way a frontend event does
+  (`_event_client( cs_event-popup_close )`): no roundtrip, the layer and the
+  unsent edits of its model are gone, `get_state( )` reflects it. The agent
+  used to edit the private state JSON for its `@CLOSE_POPUP`.
 
 ---
 

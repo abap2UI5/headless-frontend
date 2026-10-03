@@ -71,12 +71,20 @@ See [ROADMAP.md](ROADMAP.md) for where it goes from here.
 | --- | --- |
 | `start( app )` | Start an app — mirrors the browser's first POST with `?app_start=<class>` |
 | `resume( id state refresh )` | Continue a draft-based session from its draft id in a new instance — see below |
-| `set_value( name value )` | Queue a value into the model delta of the next roundtrip |
-| `set_cell( table row column value )` | Queue one table cell as a row delta (`TABLE.__delta.row.COLUMN`), `row` 1-based |
-| `click( event t_arg )` | Fire an event, send the pending delta, replay the response |
-| `set_check_events( val )` | Opt in: `click( )` raises for an event that is not wired in the active layer |
+| `set_value( name value layer )` | Queue a text value (what an input sends) into the delta of the next roundtrip |
+| `set_json( path json layer )` | Queue a raw JSON value at a model path — `true`, `42`, `["A","C"]`, `{"F":1}` — see [Typed edits](#typed-edits) |
+| `set_bool( name value layer )` | Queue a boolean (CheckBox, Switch), sent as JSON `true` / `false` |
+| `set_cell( table row column value layer )` | Queue one table cell as a row delta (`TABLE.__delta.row.COLUMN`), `row` 1-based |
+| `set_row( table row json layer )` | Queue several cells of one row from a JSON object (`{"QTY":3,"NAME":"Pen"}`), one row delta |
+| `select_row( table row column selected layer )` | Select / deselect a row — a boolean in the column its items bind `selected` to |
+| `close_layer( layer )` | Close a layer in the browser only (`_event_client( cs_event-popup_close )`) — no roundtrip |
+| `click( event t_arg layer )` | Fire an event, send the pending edits of the firing layer's model, replay the response |
+| `set_check_events( val )` | Opt in: `click( )` raises for an event that is not wired in the firing layer |
 
-`set_value( )`, `set_cell( )`, `click( )` and `set_check_events( )` return the
+`layer` is optional everywhere: an edit goes into, and an event is fired from,
+the topmost open layer unless another one is named.
+
+The setters, `close_layer( )`, `click( )` and `set_check_events( )` return the
 instance, so a whole session fits in one statement:
 
 ```abap
@@ -86,6 +94,46 @@ DATA(msg) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
     )->click( `GREET`
     )->get_message( ).
 ```
+
+### Typed edits
+
+The browser does not send text only: a CheckBox writes a boolean into its
+model, a MultiComboBox an array of keys, a StepInput a number.
+`set_json( path json )` queues exactly such a value; `set_value( )`,
+`set_bool( )`, `set_cell( )`, `set_row( )` and `select_row( )` are shorthands
+for it, so every edit takes the same way:
+
+```abap
+sim->set_bool( `MV_ACTIVE`
+    )->set_json( path = `MT_KEY`
+                 json = `["A","C"]`
+    )->set_value( name  = `MS_ORDER/NAME`
+                  value = `Max`
+    )->select_row( table  = `MT_ROW`
+                   row    = 2
+                   column = `SELKZ`
+    )->click( `SAVE` ).
+```
+
+- **An edit goes into the model of its layer** — the own copy of an open popup
+  or popover, else the MAIN model the nested views share — and travels with
+  the next event of that layer. An event of another layer leaves it pending;
+  closing its layer drops it. This is the frontend's rule
+  (`View1 _pickModelForRoundtrip`).
+- **The delta is the frontend's** (`Lib.buildDeltaFromPaths`), built from the
+  layer's model with every edit applied: a table cell (`/TAB/1/COL`, nested
+  `/TAB/1/SUB/0/COL`) goes out as a row delta `TAB.__delta.1.COL`, every other
+  path — a scalar, a structure field, an array element, a cell of a table
+  inside a structure — as the whole top-level attribute. A whole value queued
+  next to a delta of the same attribute wins, a later edit of a path replaces
+  the earlier one.
+- **Model paths count rows from 0**, as the frontend records them
+  (`/MS_ORDER/T_POS/1/QTY` is the second position). `set_cell( )`,
+  `set_row( )` and `select_row( )` take ABAP's 1-based row.
+- **What went out stays in the layer's model**, as in the browser — the
+  backend leaves an unchanged model out of its response, so `get_value( )`
+  reads the sent value back afterwards. A pending edit is not visible there.
+- `get_request_json( )` shows the request as it went out, the delta included.
 
 ### Reading the screen
 
@@ -97,8 +145,8 @@ DATA(msg) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
 | `get_layers( )` | Every open layer — `MAIN`, `NEST`, `NEST2`, `POPUP`, `POPOVER` — with view XML, JSON model, owning app and anchor control |
 | `get_model( layer )` | JSON model of the topmost (or given) layer |
 | `get_value( name layer )` | A value from the model of the topmost (or given) layer, falling back to the last model the server sent |
-| `get_events( )` | Events wired in the active layer |
-| `check_event_exists( event )` | Whether an event is wired in the active layer |
+| `get_events( layer )` | Events wired in the active (or given) layer |
+| `check_event_exists( event layer )` | Whether an event is wired in the active (or given) layer |
 | `get_message( )` | Text of the last toast / message box of the last roundtrip |
 | `get_messages( only_last )` | All messages of the session: source (`toast` / `box`), type (`success` / `info` / `warning` / `error`), raw MessageBox method, text, title, details, roundtrip |
 | `get_actions( )` | Follow-up actions of the last response (`SET_FOCUS`, `CONTROL_BY_ID`, ...) with their arguments |
@@ -109,6 +157,7 @@ DATA(msg) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
 | `get_state( )` | What the browser knows and the draft does not, as JSON — for `resume( )` |
 | `get_roundtrip( )` | Number of roundtrips of this instance |
 | `get_response_json( )` | Raw response JSON of the last roundtrip |
+| `get_request_json( )` | Raw request JSON of the last roundtrip, with the model delta as it went out |
 
 ### Layers
 
@@ -127,15 +176,21 @@ A response's model is pushed into every open layer that belongs to the app that
 answered — exactly the frontend's rule, so a popup of a called app does not see
 the caller's model.
 
+A layer the browser closes on its own — `_event_client( cs_event-popup_close )`
+— is closed with `close_layer( )`: no roundtrip, the backend is not told, the
+layer and the unsent edits of its model are gone, and `get_state( )` no longer
+carries it.
+
 ### Event validation
 
 `check_event_exists( )` and `get_events( )` read the event wires
 (`.eB(['NAME',...])`) out of the active layer: an open popover, else an open
 popup — dialogs are modal — else the main view with its nested views. With
 `set_check_events( )` on, `click( )` refuses an event the user could not reach
-and names the ones they could. It is a check on the view XML, not on a control
-tree: visibility and enablement are not evaluated, and events raised by timers
-or keyboard shortcuts are not wired in a view.
+and names the ones they could. A `click( )` that names the `MAIN` layer while a
+popup is open is refused as well — a dialog is modal. It is a check on the
+view XML, not on a control tree: visibility and enablement are not evaluated,
+and events raised by timers or keyboard shortcuts are not wired in a view.
 
 ### Resuming a session
 
@@ -192,10 +247,11 @@ makes, so what you test is what runs in production.
 | `z2ui5_cl_frontend_simulator` | The simulator |
 | `z2ui5_cl_frontend_sim_example` | Minimal app — one input, one text, two buttons — that exists to be driven by it |
 | `z2ui5_cl_frontend_sim_layers` | Example app with every layer: popup, popover, nested view, an editable table, follow-up actions, a message box, app-state hash, `nav_app_call( )` and the switch to a sticky session |
+| `z2ui5_cl_frontend_sim_form` | Example app for typed edits: a CheckBox, a MultiComboBox, a structure that holds a table, a selectable table with a nested table in its rows |
 
 The simulator's own unit tests live in
 `z2ui5_cl_frontend_simulator.clas.testclasses.abap` and drive both example
-apps. They double as the usage documentation:
+apps and the form app. They double as the usage documentation:
 
 - `ltcl_frontend_simulator` (`RISK LEVEL HARMLESS`) installs an in-memory draft
   store through the core's store seam (`z2ui5_cl_ui5_srv_draft=>set_instance`),
@@ -220,10 +276,12 @@ change there can require a change here.
 ## Current scope
 
 Covered: the main view, nested views, popup and popover with their models,
-messages with severity, follow-up actions, the browser-history intent, table
-row deltas, sticky and draft sessions, app-to-app navigation, resuming a
-session across requests, and an opt-in check that an event is wired in the
-active layer.
+messages with severity, follow-up actions, the browser-history intent, typed
+edits (booleans, arrays, numbers, structures with tables) with the frontend's
+delta per layer model, table row deltas including nested tables, row
+selection, closing a layer in the browser, sticky and draft sessions,
+app-to-app navigation, resuming a session across requests, and an opt-in check
+that an event is wired in the active layer.
 
 Not covered yet: an injectable frontend `CONFIG` (device, UI5 version, focus,
 scroll), a control tree with visibility and enablement, and

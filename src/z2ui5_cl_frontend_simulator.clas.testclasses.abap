@@ -99,6 +99,23 @@ CLASS ltcl_frontend_simulator DEFINITION FINAL
     METHODS resume_refresh            FOR TESTING.
     METHODS resume_errors             FOR TESTING.
     METHODS sticky_session            FOR TESTING.
+    METHODS typed_bool                FOR TESTING.
+    METHODS typed_multichoice         FOR TESTING.
+    METHODS structure_with_table      FOR TESTING.
+    METHODS row_selection             FOR TESTING.
+    METHODS nested_table_delta        FOR TESTING.
+    METHODS delta_rules               FOR TESTING.
+    METHODS edits_per_layer           FOR TESTING.
+    METHODS close_layer_locally       FOR TESTING.
+    METHODS typed_errors              FOR TESTING.
+
+    "! The model delta of the last request as JSON - empty when it carried none.
+    METHODS model_sent
+      IMPORTING
+        sim           TYPE REF TO z2ui5_cl_frontend_simulator
+        path          TYPE string DEFAULT ``
+      RETURNING
+        VALUE(result) TYPE string.
 ENDCLASS.
 
 
@@ -641,6 +658,377 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
       CATCH z2ui5_cx_ui5_util_error INTO DATA(lx).
         cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `sticky` ) ).
     ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD model_sent.
+
+    TRY.
+        DATA(lo_req) = z2ui5_cl_ajson=>parse( sim->get_request_json( ) ).
+        DATA(lo_model) = lo_req->slice( |/value/MODEL{ path }| ).
+        IF lo_model IS BOUND.
+          result = lo_model->stringify( ).
+        ENDIF.
+      CATCH cx_root INTO DATA(lx).
+        cl_abap_unit_assert=>fail( lx->get_text( ) ).
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD typed_bool.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_FORM` ).
+
+    " a CheckBox sends a boolean, the core turns it into abap_true
+    lo_sim->set_bool( `MV_ACTIVE` )->click( `CHECK` ).
+    cl_abap_unit_assert=>assert_equals( exp = `{"MV_ACTIVE":true}`
+                                        act = model_sent( lo_sim ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `active yes`
+                                        act = lo_sim->get_message( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `true`
+                                        act = lo_sim->get_value( `MV_ACTIVE` ) ).
+
+    lo_sim->set_bool( name  = `MV_ACTIVE`
+                      value = abap_false )->click( `CHECK` ).
+    cl_abap_unit_assert=>assert_equals( exp = `{"MV_ACTIVE":false}`
+                                        act = model_sent( lo_sim ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `active no`
+                                        act = lo_sim->get_message( ) ).
+
+  ENDMETHOD.
+
+  METHOD typed_multichoice.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_FORM` ).
+
+    " MultiComboBox selectedKeys: an array, sent as the whole attribute
+    lo_sim->set_json( path = `MT_KEY`
+                      json = `["A","C"]` )->click( `KEYS` ).
+    cl_abap_unit_assert=>assert_equals( exp = `{"MT_KEY":["A","C"]}`
+                                        act = model_sent( lo_sim ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `keys A,C`
+                                        act = lo_sim->get_message( ) ).
+
+    " one element of an array is no table cell - the whole array travels,
+    " with the edit applied to what the model holds
+    lo_sim->set_json( path = `/MT_KEY/2`
+                      json = `"B"` )->click( `KEYS` ).
+    cl_abap_unit_assert=>assert_equals( exp = `{"MT_KEY":["A","C","B"]}`
+                                        act = model_sent( lo_sim ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `keys A,C,B`
+                                        act = lo_sim->get_message( ) ).
+
+    lo_sim->set_json( path = `MT_KEY`
+                      json = `[]` )->click( `KEYS` ).
+    cl_abap_unit_assert=>assert_equals( exp = `keys none`
+                                        act = lo_sim->get_message( ) ).
+
+  ENDMETHOD.
+
+  METHOD structure_with_table.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_FORM` ).
+
+    " a field of a structure: the whole structure goes out, its table with it
+    lo_sim->set_value( name  = `MS_ORDER/NAME`
+                       value = `Max` )->click( `ORDER` ).
+    DATA(lv_sent) = model_sent( sim  = lo_sim
+                                path = `/MS_ORDER` ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lv_sent CS `"NAME":"Max"` ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lv_sent CS `"T_POS":[{"ITEM":"Pen","QTY":1},{"ITEM":"Ink","QTY":2}]` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Max normal Paris positions 2 qty 3`
+                                        act = lo_sim->get_message( ) ).
+
+    " a cell of the table inside it, a boolean and a nested structure field -
+    " three edits, one whole structure
+    lo_sim->set_json( path = `MS_ORDER/T_POS/1/QTY`
+                      json = `5`
+        )->set_bool( `MS_ORDER/URGENT`
+        )->set_value( name  = `/ms_order/s_addr/city`
+                      value = `Rome`
+        )->click( `ORDER` ).
+    lv_sent = model_sent( sim  = lo_sim
+                          path = `/MS_ORDER` ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lv_sent CS `"S_ADDR":{"CITY":"Rome"}` ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lv_sent CS `"URGENT":true` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Max urgent Rome positions 2 qty 6`
+                                        act = lo_sim->get_message( ) ).
+
+    " set_cell( ) addresses such a table too
+    lo_sim->set_cell( table  = `MS_ORDER/T_POS`
+                      row    = 1
+                      column = `QTY`
+                      value  = `4` )->click( `ORDER` ).
+    cl_abap_unit_assert=>assert_equals( exp = `Max urgent Rome positions 2 qty 9`
+                                        act = lo_sim->get_message( ) ).
+
+  ENDMETHOD.
+
+  METHOD row_selection.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_FORM` ).
+
+    " a MultiSelect table writes its selection into the column its items
+    " bind selected to - boolean cells, one row delta with the typed row
+    lo_sim->select_row( table  = `MT_ROW`
+                        row    = 1
+                        column = `SELKZ`
+        )->select_row( table  = `MT_ROW`
+                       row    = 3
+                       column = `SELKZ`
+        )->set_row( table = `MT_ROW`
+                    row   = 3
+                    json  = `{"QTY":7,"NAME":"Cleo"}`
+        )->click( `ROWS` ).
+    cl_abap_unit_assert=>assert_equals( exp = `{"MT_ROW":{"__delta":{"0":{"SELKZ":true},"2":{"NAME":"Cleo","QTY":7,"SELKZ":true}}}}`
+                                        act = model_sent( lo_sim ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `selected Anna,Cleo qty 8 sub 91`
+                                        act = lo_sim->get_message( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `true`
+                                        act = lo_sim->get_value( `MT_ROW/1/SELKZ` ) ).
+
+    lo_sim->select_row( table    = `MT_ROW`
+                        row      = 1
+                        column   = `SELKZ`
+                        selected = abap_false )->click( `ROWS` ).
+    cl_abap_unit_assert=>assert_equals( exp = `selected Cleo qty 7 sub 91`
+                                        act = lo_sim->get_message( ) ).
+
+  ENDMETHOD.
+
+  METHOD nested_table_delta.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_FORM` ).
+
+    " a cell of a table inside a table row: one __delta level per table
+    lo_sim->set_json( path = `MT_ROW/2/T_SUB/1/QTY`
+                      json = `40` )->click( `ROWS` ).
+    cl_abap_unit_assert=>assert_equals( exp = `{"MT_ROW":{"__delta":{"2":{"T_SUB":{"__delta":{"1":{"QTY":40}}}}}}}`
+                                        act = model_sent( lo_sim ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `selected none qty 0 sub 100`
+                                        act = lo_sim->get_message( ) ).
+
+  ENDMETHOD.
+
+  METHOD delta_rules.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+
+    " a whole table queued next to a cell of it carries the cell - it wins,
+    " in either order (Lib.buildDeltaFromPaths)
+    lo_sim->set_cell( table  = `MT_ITEM`
+                      row    = 1
+                      column = `QTY`
+                      value  = `100`
+        )->set_json( path = `MT_ITEM`
+                     json = `[{"NAME":"X","QTY":4}]`
+        )->click( `SUM` ).
+    cl_abap_unit_assert=>assert_equals( exp = `{"MT_ITEM":[{"NAME":"X","QTY":4}]}`
+                                        act = model_sent( lo_sim ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `4`
+                                        act = lo_sim->get_value( `MV_TOTAL` ) ).
+
+    lo_sim->set_json( path = `MT_ITEM`
+                      json = `[{"NAME":"Y","QTY":1},{"NAME":"Z","QTY":2}]`
+        )->set_cell( table  = `MT_ITEM`
+                     row    = 2
+                     column = `QTY`
+                     value  = `7`
+        )->click( `SUM` ).
+    cl_abap_unit_assert=>assert_equals( exp = `{"MT_ITEM":[{"NAME":"Y","QTY":1},{"NAME":"Z","QTY":"7"}]}`
+                                        act = model_sent( lo_sim ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `8`
+                                        act = lo_sim->get_value( `MV_TOTAL` ) ).
+
+    " cells of one row share its delta, a later edit of a cell replaces it
+    lo_sim->set_cell( table  = `MT_ITEM`
+                      row    = 1
+                      column = `QTY`
+                      value  = `2`
+        )->set_cell( table  = `MT_ITEM`
+                     row    = 1
+                     column = `NAME`
+                     value  = `W`
+        )->set_cell( table  = `MT_ITEM`
+                     row    = 1
+                     column = `QTY`
+                     value  = `3`
+        )->click( `SUM` ).
+    cl_abap_unit_assert=>assert_equals( exp = `{"MT_ITEM":{"__delta":{"0":{"NAME":"W","QTY":"3"}}}}`
+                                        act = model_sent( lo_sim ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `10`
+                                        act = lo_sim->get_value( `MV_TOTAL` ) ).
+
+    " nothing queued, nothing sent
+    lo_sim->click( `SUM` ).
+    cl_abap_unit_assert=>assert_initial( model_sent( lo_sim ) ).
+
+    " what went out stays in the model, as in the browser - also when the
+    " response carries none (the backend's is unchanged against the client)
+    lo_sim->set_value( name  = `MV_NAME`
+                       value = `Kept` )->click( `FOCUS` ).
+    cl_abap_unit_assert=>assert_false( xsdbool( lo_sim->get_response_json( ) CS `"MODEL"` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Kept`
+                                        act = lo_sim->get_value( `MV_NAME` ) ).
+
+  ENDMETHOD.
+
+  METHOD edits_per_layer.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_sim->click( `POPOVER_OPEN` ).
+
+    " typed into the popover's own model - an event of the main view does
+    " not carry it, the popover's next event does
+    lo_sim->set_value( name  = `MV_NAME`
+                       value = `Pop` ).
+    lo_sim->click( event = `SUM`
+                   layer = `MAIN` ).
+    cl_abap_unit_assert=>assert_initial( model_sent( lo_sim ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `POPOVER`
+                                        act = lo_sim->get_layer( ) ).
+    lo_sim->click( `POPOVER_CLOSE` ).
+    cl_abap_unit_assert=>assert_equals( exp = `{"MV_NAME":"Pop"}`
+                                        act = model_sent( lo_sim ) ).
+    " the backend took it - the popup opens with it
+    lo_sim->click( `POPUP_OPEN` ).
+    cl_abap_unit_assert=>assert_equals( exp = `Pop`
+                                        act = lo_sim->get_value( `MV_POPUP_TEXT` ) ).
+    lo_sim->click( `POPUP_CANCEL` ).
+
+    " a nested view edits the MAIN model
+    lo_sim->click( `NEST_SHOW` ).
+    lo_sim->set_value( name  = `MV_NAME`
+                       value = `Main`
+                       layer = `nest` ).
+    lo_sim->click( `POPUP_OPEN` ).
+    cl_abap_unit_assert=>assert_equals( exp = `Main`
+                                        act = lo_sim->get_value( `MV_POPUP_TEXT` ) ).
+
+    " a dialog is modal - with the check on, the main view cannot fire
+    lo_sim->set_check_events( ).
+    TRY.
+        lo_sim->click( event = `SUM`
+                       layer = `MAIN` ).
+        cl_abap_unit_assert=>fail( `expected an error for an event behind a dialog` ).
+      CATCH z2ui5_cx_ui5_util_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `EVENT_NOT_REACHABLE` ) ).
+    ENDTRY.
+
+    TRY.
+        lo_sim->set_value( name  = `MV_NAME`
+                           value = `X`
+                           layer = `POPOVER` ).
+        cl_abap_unit_assert=>fail( `expected an error for a layer that is not open` ).
+      CATCH z2ui5_cx_ui5_util_error INTO lx.
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `LAYER_NOT_OPEN` ) ).
+    ENDTRY.
+
+    TRY.
+        lo_sim->set_value( name  = `MV_NAME`
+                           value = `X`
+                           layer = `DIALOG` ).
+        cl_abap_unit_assert=>fail( `expected an error for an unknown layer` ).
+      CATCH z2ui5_cx_ui5_util_error INTO lx.
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `LAYER_UNKNOWN` ) ).
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD close_layer_locally.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_sim->click( `POPUP_OPEN` ).
+    lo_sim->set_value( name  = `MV_POPUP_TEXT`
+                       value = `Lost` ).
+    DATA(lv_roundtrip) = lo_sim->get_roundtrip( ).
+
+    " closed in the browser: no roundtrip, the popup and its edit are gone
+    lo_sim->close_layer( `popup` ).
+    cl_abap_unit_assert=>assert_equals( exp = lv_roundtrip
+                                        act = lo_sim->get_roundtrip( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `MAIN`
+                                        act = lo_sim->get_layer( ) ).
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_popup( ) ).
+
+    " ... and the state handed to the next request says so
+    DATA(lo_next) = z2ui5_cl_frontend_simulator=>resume( id    = lo_sim->get_id( )
+                                                         state = lo_sim->get_state( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `MAIN`
+                                        act = lo_next->get_layer( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = lines( lo_next->get_layers( ) ) ).
+
+    lo_sim->click( `SUM` ).
+    cl_abap_unit_assert=>assert_false( xsdbool( lo_sim->get_request_json( ) CS `Lost` ) ).
+
+    " a popover the same way; a layer that is not open is left alone
+    lo_sim->click( `POPOVER_OPEN` )->close_layer( `POPOVER` ).
+    cl_abap_unit_assert=>assert_equals( exp = `MAIN`
+                                        act = lo_sim->get_layer( ) ).
+    lo_sim->close_layer( `POPUP` ).
+    cl_abap_unit_assert=>assert_equals( exp = `MAIN`
+                                        act = lo_sim->get_layer( ) ).
+
+    TRY.
+        lo_sim->close_layer( `DIALOG` ).
+        cl_abap_unit_assert=>fail( `expected an error for an unknown layer` ).
+      CATCH z2ui5_cx_ui5_util_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `LAYER_UNKNOWN` ) ).
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD typed_errors.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_request_json( ) CS `app_start=Z2UI5_CL_FRONTEND_SIM_LAYERS` ) ).
+
+    TRY.
+        lo_sim->set_json( path = `MV_NAME`
+                          json = `not json` ).
+        cl_abap_unit_assert=>fail( `expected an error for a value that is no JSON` ).
+      CATCH z2ui5_cx_ui5_util_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `SET_JSON_INVALID` ) ).
+    ENDTRY.
+
+    TRY.
+        lo_sim->set_json( path = `MV_NAME`
+                          json = `1,"MV_TOTAL":2` ).
+        cl_abap_unit_assert=>fail( `expected an error for more than one value` ).
+      CATCH z2ui5_cx_ui5_util_error INTO lx.
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `SET_JSON_INVALID` ) ).
+    ENDTRY.
+
+    TRY.
+        lo_sim->set_json( path = `/`
+                          json = `1` ).
+        cl_abap_unit_assert=>fail( `expected an error for an empty path` ).
+      CATCH z2ui5_cx_ui5_util_error INTO lx.
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `SET_PATH_EMPTY` ) ).
+    ENDTRY.
+
+    TRY.
+        lo_sim->set_row( table = `MT_ITEM`
+                         row   = 1
+                         json  = `[1]` ).
+        cl_abap_unit_assert=>fail( `expected an error for a row that is no object` ).
+      CATCH z2ui5_cx_ui5_util_error INTO lx.
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `SET_ROW_NO_OBJECT` ) ).
+    ENDTRY.
+
+    TRY.
+        lo_sim->set_row( table = `MT_ITEM`
+                         row   = 0
+                         json  = `{"QTY":1}` ).
+        cl_abap_unit_assert=>fail( `expected an error for row 0` ).
+      CATCH z2ui5_cx_ui5_util_error INTO lx.
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `SET_CELL_ROW_INVALID` ) ).
+    ENDTRY.
+
+    " a refused edit queues nothing
+    lo_sim->click( `SUM` ).
+    cl_abap_unit_assert=>assert_initial( model_sent( lo_sim ) ).
 
   ENDMETHOD.
 
