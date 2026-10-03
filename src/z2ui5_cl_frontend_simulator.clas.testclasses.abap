@@ -82,6 +82,23 @@ CLASS ltcl_frontend_simulator DEFINITION FINAL
     METHODS draft_path_uses_store FOR TESTING.
     METHODS messages_kept         FOR TESTING.
     METHODS message_box_severity  FOR TESTING.
+    METHODS popup_flow                FOR TESTING.
+    METHODS popup_cancel              FOR TESTING.
+    METHODS popover_anchor            FOR TESTING.
+    METHODS nested_view               FOR TESTING.
+    METHODS main_display_closes_popup FOR TESTING.
+    METHODS app_switch                FOR TESTING.
+    METHODS follow_up_action          FOR TESTING.
+    METHODS nav_app_state             FOR TESTING.
+    METHODS table_cell_delta          FOR TESTING.
+    METHODS row_event_arg             FOR TESTING.
+    METHODS events_wired              FOR TESTING.
+    METHODS strict_click              FOR TESTING.
+    METHODS resume_with_state         FOR TESTING.
+    METHODS resume_without_state      FOR TESTING.
+    METHODS resume_refresh            FOR TESTING.
+    METHODS resume_errors             FOR TESTING.
+    METHODS sticky_session            FOR TESTING.
 ENDCLASS.
 
 
@@ -251,6 +268,382 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   ENDMETHOD.
 
+
+  METHOD popup_flow.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_sim->set_value( name  = `MV_NAME`
+                       value = `Ann` ).
+    lo_sim->click( `POPUP_OPEN` ).
+
+    " the dialog is the topmost layer now, the main view still underneath
+    cl_abap_unit_assert=>assert_equals( exp = `POPUP`
+                                        act = lo_sim->get_layer( ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_popup( ) CS `Dialog` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = lo_sim->get_popup( )
+                                        act = lo_sim->get_view( ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_view( `MAIN` ) CS `Simulator Layers` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Ann`
+                                        act = lo_sim->get_value( `MV_POPUP_TEXT` ) ).
+
+    lo_sim->set_value( name  = `MV_POPUP_TEXT`
+                       value = `Bea` ).
+    lo_sim->click( `POPUP_CONFIRM` ).
+
+    " closed again, the value travelled through the popup into the main model
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_popup( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `MAIN`
+                                        act = lo_sim->get_layer( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Bea`
+                                        act = lo_sim->get_value( `MV_NAME` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Name set to Bea`
+                                        act = lo_sim->get_message( ) ).
+
+  ENDMETHOD.
+
+  METHOD popup_cancel.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_sim->set_value( name  = `MV_NAME`
+                       value = `Ann` ).
+    lo_sim->click( `POPUP_OPEN` ).
+    lo_sim->set_value( name  = `MV_POPUP_TEXT`
+                       value = `Bea` ).
+    lo_sim->click( `POPUP_CANCEL` ).
+
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_popup( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Ann`
+                                        act = lo_sim->get_value( `MV_NAME` ) ).
+
+  ENDMETHOD.
+
+  METHOD popover_anchor.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_sim->click( `POPOVER_OPEN` ).
+
+    cl_abap_unit_assert=>assert_equals( exp = `POPOVER`
+                                        act = lo_sim->get_layer( ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_popover( ) CS `Popover` ) ).
+    DATA(lt_layer) = lo_sim->get_layers( ).
+    READ TABLE lt_layer INTO DATA(ls_layer) WITH KEY layer = `POPOVER`. "#EC CI_SORTSEQ
+    cl_abap_unit_assert=>assert_subrc( ).
+    cl_abap_unit_assert=>assert_equals( exp = `btnPopover`
+                                        act = ls_layer-anchor_id ).
+    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_SIM_LAYERS`
+                                        act = ls_layer-app ).
+
+    lo_sim->click( `POPOVER_CLOSE` ).
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_popover( ) ).
+
+  ENDMETHOD.
+
+  METHOD nested_view.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_sim->set_value( name  = `MV_NAME`
+                       value = `Nest` ).
+    lo_sim->click( `NEST_SHOW` ).
+
+    " a nested view is part of the MAIN layer, not on top of it
+    cl_abap_unit_assert=>assert_equals( exp = `MAIN`
+                                        act = lo_sim->get_layer( ) ).
+    DATA(lt_layer) = lo_sim->get_layers( ).
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = lines( lt_layer ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `NEST`
+                                        act = lt_layer[ 2 ]-layer ).
+    cl_abap_unit_assert=>assert_equals( exp = `nestHost`
+                                        act = lt_layer[ 2 ]-anchor_id ).
+    " ... and it is bound against the model it inherits from MAIN
+    cl_abap_unit_assert=>assert_equals( exp = lt_layer[ 1 ]-model
+                                        act = lt_layer[ 2 ]-model ).
+    cl_abap_unit_assert=>assert_equals( exp = `Nest`
+                                        act = lo_sim->get_value( name  = `MV_NAME`
+                                                                 layer = `NEST` ) ).
+
+    lo_sim->click( `NEST_HIDE` ).
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_view( `NEST` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = lines( lo_sim->get_layers( ) ) ).
+
+  ENDMETHOD.
+
+  METHOD main_display_closes_popup.
+
+    " a new MAIN view is a new screen - the frontend takes open dialogs down
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_sim->click( `NEST_SHOW` ).
+    lo_sim->click( `POPUP_OPEN` ).
+    lo_sim->click( `REFRESH` ).
+
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_popup( ) ).
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_view( `NEST` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `MAIN`
+                                        act = lo_sim->get_layer( ) ).
+
+  ENDMETHOD.
+
+  METHOD app_switch.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_SIM_LAYERS`
+                                        act = lo_sim->get_app( ) ).
+    lo_sim->click( `POPUP_OPEN` ).
+
+    " nav_app_call: the called app answers, the caller's dialog is gone
+    lo_sim->click( `NAV` ).
+    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
+                                        act = lo_sim->get_app( ) ).
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_popup( ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_view( ) CS `Simulator Example` ) ).
+
+    lo_sim->set_value( name  = `MV_NAME`
+                       value = `Nav` ).
+    lo_sim->click( `GREET` ).
+    cl_abap_unit_assert=>assert_equals( exp = `Hello Nav!`
+                                        act = lo_sim->get_message( ) ).
+
+  ENDMETHOD.
+
+  METHOD follow_up_action.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_sim->click( `FOCUS` ).
+
+    DATA(lt_action) = lo_sim->get_actions( ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = lines( lt_action ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `SET_FOCUS`
+                                        act = lt_action[ 1 ]-name ).
+    cl_abap_unit_assert=>assert_equals( exp = `inputName`
+                                        act = lt_action[ 1 ]-t_arg[ 1 ] ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lt_action[ 1 ]-json CS `SET_FOCUS` ) ).
+
+    " follow-up actions belong to one response
+    lo_sim->click( `SUM` ).
+    lt_action = lo_sim->get_actions( ).
+    cl_abap_unit_assert=>assert_equals( exp = `MESSAGE_TOAST`
+                                        act = lt_action[ 1 ]-name ).
+
+  ENDMETHOD.
+
+  METHOD nav_app_state.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    cl_abap_unit_assert=>assert_false( lo_sim->get_nav( )-set_app_state_active ).
+
+    lo_sim->click( `APP_STATE` ).
+    cl_abap_unit_assert=>assert_true( lo_sim->get_nav( )-set_app_state_active ).
+
+    " the app keeps asking for it on every later response
+    lo_sim->click( `SUM` ).
+    cl_abap_unit_assert=>assert_true( lo_sim->get_nav( )-set_app_state_active ).
+
+  ENDMETHOD.
+
+  METHOD table_cell_delta.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_sim->set_cell( table  = `MT_ITEM`
+                      row    = 2
+                      column = `QTY`
+                      value  = `10` ).
+    lo_sim->click( `SUM` ).
+
+    " 1 + 10 + 3 - the row delta reached row 2 only
+    cl_abap_unit_assert=>assert_equals( exp = `14`
+                                        act = lo_sim->get_value( `MV_TOTAL` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `10`
+                                        act = lo_sim->get_value( `MT_ITEM/2/QTY` ) ).
+
+  ENDMETHOD.
+
+  METHOD row_event_arg.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_sim->click( event = `ROW`
+                   t_arg = VALUE #( ( `Bananas` ) ) ).
+
+    cl_abap_unit_assert=>assert_equals( exp = `Bananas`
+                                        act = lo_sim->get_value( `MV_SELECTED` ) ).
+
+  ENDMETHOD.
+
+  METHOD events_wired.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+
+    cl_abap_unit_assert=>assert_true( lo_sim->check_event_exists( `POPUP_OPEN` ) ).
+    cl_abap_unit_assert=>assert_true( lo_sim->check_event_exists( `ROW` ) ).
+    cl_abap_unit_assert=>assert_false( lo_sim->check_event_exists( `POPUP_CONFIRM` ) ).
+    cl_abap_unit_assert=>assert_false( lo_sim->check_event_exists( `NEST_HIDE` ) ).
+
+    " a nested view adds its events to the MAIN layer
+    lo_sim->click( `NEST_SHOW` ).
+    cl_abap_unit_assert=>assert_true( lo_sim->check_event_exists( `NEST_HIDE` ) ).
+    cl_abap_unit_assert=>assert_true( lo_sim->check_event_exists( `SUM` ) ).
+
+    " a dialog is modal: only its own events are reachable
+    lo_sim->click( `POPUP_OPEN` ).
+    cl_abap_unit_assert=>assert_equals( exp = VALUE string_table( ( `POPUP_CANCEL` ) ( `POPUP_CONFIRM` ) )
+                                        act = lo_sim->get_events( ) ).
+    cl_abap_unit_assert=>assert_false( lo_sim->check_event_exists( `SUM` ) ).
+
+  ENDMETHOD.
+
+  METHOD strict_click.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
+        )->set_check_events( ).
+
+    TRY.
+        lo_sim->click( `NOT_WIRED` ).
+        cl_abap_unit_assert=>fail( `expected an error for an event that is not wired` ).
+      CATCH z2ui5_cx_ui5_util_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `GREET` ) ).
+    ENDTRY.
+
+    " the roundtrip did not happen, and a wired event still goes through
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = lo_sim->get_roundtrip( ) ).
+    lo_sim->set_value( name  = `MV_NAME`
+                       value = `Strict` ).
+    lo_sim->click( `GREET` ).
+    cl_abap_unit_assert=>assert_equals( exp = `Hello Strict!`
+                                        act = lo_sim->get_message( ) ).
+
+  ENDMETHOD.
+
+  METHOD resume_with_state.
+
+    " request 1: start, open the popup, hand over id and state
+    DATA(lo_first) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    lo_first->set_value( name  = `MV_NAME`
+                         value = `Res` ).
+    lo_first->click( `POPUP_OPEN` ).
+    DATA(lv_id) = lo_first->get_id( ).
+    DATA(lv_state) = lo_first->get_state( ).
+
+    " request 2: a new instance continues where the first one stopped
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>resume( id    = lv_id
+                                                        state = lv_state ).
+    cl_abap_unit_assert=>assert_equals( exp = lv_id
+                                        act = lo_sim->get_id( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `POPUP`
+                                        act = lo_sim->get_layer( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = lo_first->get_popup( )
+                                        act = lo_sim->get_popup( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_SIM_LAYERS`
+                                        act = lo_sim->get_app( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 0
+                                        act = lo_sim->get_roundtrip( ) ).
+
+    lo_sim->set_check_events( ).
+    lo_sim->set_value( name  = `MV_POPUP_TEXT`
+                       value = `Resumed` ).
+    lo_sim->click( `POPUP_CONFIRM` ).
+    cl_abap_unit_assert=>assert_equals( exp = `Resumed`
+                                        act = lo_sim->get_value( `MV_NAME` ) ).
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_popup( ) ).
+
+  ENDMETHOD.
+
+  METHOD resume_without_state.
+
+    DATA(lo_first) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    lo_first->set_value( name  = `MV_NAME`
+                         value = `Draft` ).
+    lo_first->click( `GREET` ).
+
+    " the draft knows the app and its model, not the view
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>resume( lo_first->get_id( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
+                                        act = lo_sim->get_app( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Hello Draft!`
+                                        act = lo_sim->get_value( `MV_GREETING` ) ).
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_view( ) ).
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_layers( ) ).
+
+    lo_sim->set_value( name  = `MV_NAME`
+                       value = `Again` ).
+    lo_sim->click( `GREET` ).
+    cl_abap_unit_assert=>assert_equals( exp = `Hello Again!`
+                                        act = lo_sim->get_message( ) ).
+
+  ENDMETHOD.
+
+  METHOD resume_refresh.
+
+    DATA(lo_first) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    lo_first->set_value( name  = `MV_NAME`
+                         value = `Reload` ).
+    lo_first->click( `GREET` ).
+    DATA(lv_id) = lo_first->get_id( ).
+
+    " the reload of a routed app: the draft is restored, check_on_navigated
+    " re-displays the view - under a new draft id
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>resume( id      = lv_id
+                                                        refresh = abap_true ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_view( ) CS `Greet` ) ).
+    cl_abap_unit_assert=>assert_differs( exp = lv_id
+                                         act = lo_sim->get_id( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Reload`
+                                        act = lo_sim->get_value( `MV_NAME` ) ).
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_message( ) ).
+
+  ENDMETHOD.
+
+  METHOD resume_errors.
+
+    TRY.
+        z2ui5_cl_frontend_simulator=>resume( `00000000000000000000000000000000` ).
+        cl_abap_unit_assert=>fail( `expected an error for an unknown draft` ).
+      CATCH z2ui5_cx_ui5_util_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `RESUME_NO_DRAFT` ) ).
+    ENDTRY.
+
+    " a state of an older roundtrip does not fit the current draft
+    DATA(lo_first) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lv_state) = lo_first->get_state( ).
+    lo_first->click( `CLEAR` ).
+    TRY.
+        z2ui5_cl_frontend_simulator=>resume( id    = lo_first->get_id( )
+                                             state = lv_state ).
+        cl_abap_unit_assert=>fail( `expected an error for a stale state` ).
+      CATCH z2ui5_cx_ui5_util_error INTO lx.
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `RESUME_STATE_STALE` ) ).
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD sticky_session.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    cl_abap_unit_assert=>assert_false( lo_sim->is_sticky( ) ).
+    lo_sim->click( `STICKY` ).
+    cl_abap_unit_assert=>assert_true( lo_sim->is_sticky( ) ).
+
+    " no draft behind the id - the session lives in this instance only ...
+    cl_abap_unit_assert=>assert_false( xsdbool( line_exists( mo_store->mt_db[ id = lo_sim->get_id( ) ] ) ) ). "#EC CI_SORTSEQ
+    lo_sim->set_cell( table  = `MT_ITEM`
+                      row    = 1
+                      column = `QTY`
+                      value  = `5` ).
+    lo_sim->click( `SUM` ).
+    cl_abap_unit_assert=>assert_equals( exp = `10`
+                                        act = lo_sim->get_value( `MV_TOTAL` ) ).
+
+    " ... and cannot be resumed in another one
+    TRY.
+        z2ui5_cl_frontend_simulator=>resume( lo_sim->get_id( ) ).
+        cl_abap_unit_assert=>fail( `expected an error for a sticky session` ).
+      CATCH z2ui5_cx_ui5_util_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `sticky` ) ).
+    ENDTRY.
+
+  ENDMETHOD.
+
 ENDCLASS.
 
 
@@ -279,6 +672,7 @@ CLASS ltcl_frontend_simulator_db DEFINITION FINAL
     METHODS draft_persisted        FOR TESTING.
     METHODS rollback_before_main   FOR TESTING.
     METHODS sticky_skips_rollback  FOR TESTING.
+    METHODS resume_across_requests FOR TESTING.
 ENDCLASS.
 
 
@@ -373,6 +767,30 @@ CLASS ltcl_frontend_simulator_db IMPLEMENTATION.
     track( lo_sim ).
 
     cl_abap_unit_assert=>assert_true( marker_exists( ) ).
+
+  ENDMETHOD.
+
+  METHOD resume_across_requests.
+
+    " request 1
+    DATA(lo_first) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    track( lo_first ).
+    lo_first->set_value( name  = `MV_NAME`
+                         value = `Persisted` ).
+    lo_first->click( `GREET` ).
+    track( lo_first ).
+    DATA(lv_id) = lo_first->get_id( ).
+    DATA(lv_state) = lo_first->get_state( ).
+    CLEAR lo_first.
+
+    " request 2 - nothing but the id and the state survived
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>resume( id    = lv_id
+                                                        state = lv_state ).
+    lo_sim->click( `GREET` ).
+    track( lo_sim ).
+
+    cl_abap_unit_assert=>assert_equals( exp = `Hello Persisted!`
+                                        act = lo_sim->get_message( ) ).
 
   ENDMETHOD.
 

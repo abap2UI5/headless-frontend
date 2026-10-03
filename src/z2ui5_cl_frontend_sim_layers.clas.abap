@@ -172,18 +172,24 @@ CLASS z2ui5_cl_frontend_sim_layers IMPLEMENTATION.
                         )->a( n = `press` v = client->_event( `SUM` )
                     )->tag( `Text`
                         )->a( n = `text` v = client->_bind( mv_total )
+                    )->tag( `Text`
+                        )->a( n = `text` v = client->_bind( mv_selected )
 
                     )->ele( `Table`
                         )->a( n = `items` v = client->_bind( mt_item )
 
                         )->ele( `columns`
                             )->ele( `Column`
+
                                 )->tag( `Text`
                                     )->a( n = `text` v = `Name`
+
                             )->end(
                             )->ele( `Column`
+
                                 )->tag( `Text`
                                     )->a( n = `text` v = `Quantity`
+
                             )->end(
                         )->end(
                         )->ele( `items`
@@ -193,6 +199,7 @@ CLASS z2ui5_cl_frontend_sim_layers IMPLEMENTATION.
                                                                       t_arg = VALUE #( ( `${NAME}` ) ) )
 
                                 )->ele( `cells`
+
                                     )->tag( `Text`
                                         )->a( n = `text` v = `{NAME}`
                                     )->tag( `Input`
@@ -215,10 +222,13 @@ CLASS z2ui5_cl_frontend_sim_layers IMPLEMENTATION.
             )->a( n = `title` v = `Edit name`
 
             )->ele( `content`
+
                 )->tag( `Input`
                     )->a( n = `value` v = client->_bind( mv_popup_text )
+
             )->end(
             )->ele( `buttons`
+
                 )->tag( `Button`
                     )->a( n = `text`  v = `Cancel`
                     )->a( n = `press` v = client->_event( `POPUP_CANCEL` )
@@ -264,6 +274,7 @@ CLASS z2ui5_cl_frontend_sim_layers IMPLEMENTATION.
         )->a( n = `xmlns:mvc` v = `sap.ui.core.mvc`
 
         )->ele( `VBox`
+
             )->tag( `Text`
                 )->a( n = `text` v = client->_bind( mv_name )
             )->tag( `Button`
