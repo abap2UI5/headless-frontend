@@ -3,7 +3,7 @@
 "! Drives an app through the same request/response JSON protocol the UI5
 "! frontend uses (see abap2UI5 app/webapp/core/Server.js), but entirely on the
 "! server - no browser required. Each call to start( )/click( ) is one
-"! roundtrip: the request struct is filled, z2ui5_cl_core_handler runs the
+"! roundtrip: the request struct is filled, z2ui5_cl_ui5_handler runs the
 "! app, and the response (view XML, model, messages) is parsed and kept.
 "!
 "! Typical use in an ABAP Unit test:
@@ -91,7 +91,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
   PRIVATE SECTION.
 
-    DATA mo_handler   TYPE REF TO z2ui5_cl_core_handler.
+    DATA mo_handler   TYPE REF TO z2ui5_cl_ui5_handler.
     DATA mo_pending   TYPE REF TO z2ui5_if_ajson.
     DATA mo_model     TYPE REF TO z2ui5_if_ajson.
     DATA mv_id        TYPE string.
@@ -146,7 +146,7 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
                          iv_val          = value
                          iv_ignore_empty = abap_false ).
       CATCH cx_root INTO DATA(lx).
-        RAISE EXCEPTION TYPE z2ui5_cx_a2ui5_error EXPORTING val = lx.
+        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
     ENDTRY.
 
     result = me.
@@ -168,24 +168,27 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
                                       t_arg  = t_arg ).
 
     " Reuse the handler for sticky apps, create a fresh one otherwise -
-    " the same distinction z2ui5_cl_http_handler=>_http_post makes. Draft
+    " the same distinction z2ui5_cl_ui5_http_handler=>_http_post makes. Draft
     " based apps chain their state through the persisted id in the request.
     IF mo_handler IS BOUND.
       mo_handler->mv_request_json = lv_request.
+      mo_handler->mv_session_sticky = abap_true.
     ELSE.
-      mo_handler = NEW z2ui5_cl_core_handler( lv_request ).
+      mo_handler = NEW z2ui5_cl_ui5_handler( lv_request ).
+      mo_handler->mv_session_sticky = abap_false.
     ENDIF.
 
     TRY.
         DATA(ls_response) = mo_handler->main( ).
       CATCH cx_root INTO DATA(lx).
-        " core_handler does not catch app exceptions itself (that is the job
+        " the handler does not render app exceptions itself (that is the job
         " of _main in the http handler) - surface the real text to the test
-        RAISE EXCEPTION TYPE z2ui5_cx_a2ui5_error EXPORTING val = lx.
+        CLEAR mo_handler.
+        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
     ENDTRY.
 
     TRY.
-        IF CAST z2ui5_if_app( mo_handler->mo_action->mo_app->mo_app )->check_sticky = abap_false.
+        IF mo_handler->mo_action->mo_app->mv_check_sticky = abap_false.
           CLEAR mo_handler.
         ENDIF.
       CATCH cx_root.
@@ -235,7 +238,7 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
         result = lo_req->stringify( ).
 
       CATCH cx_root INTO DATA(lx).
-        RAISE EXCEPTION TYPE z2ui5_cx_a2ui5_error EXPORTING val = lx.
+        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
     ENDTRY.
 
   ENDMETHOD.
@@ -247,36 +250,54 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
 
     TRY.
         DATA(lo_resp) = CAST z2ui5_if_ajson( z2ui5_cl_ajson=>parse( json ) ).
+
+        IF lo_resp->exists( `/S_FRONT/ID` ).
+          mv_id = lo_resp->get_string( `/S_FRONT/ID` ).
+        ENDIF.
+
+        " every view build travels as a VIEW_SLOTS system action - the view
+        " XML is only sent when the view changed, so keep the last one
+        DATA(lv_index) = 1.
+        DO.
+          DATA(lv_path) = |/S_FRONT/S_ACTION/T_SYSTEM/{ lv_index }|.
+          IF lo_resp->exists( lv_path ) = abap_false.
+            EXIT.
+          ENDIF.
+          IF lo_resp->get_string( |{ lv_path }/1| ) = `VIEW_SLOTS`
+              AND lo_resp->get_string( |{ lv_path }/2| ) = `display`
+              AND lo_resp->get_string( |{ lv_path }/3| ) = `MAIN`.
+            mv_view_xml = lo_resp->get_string( |{ lv_path }/4| ).
+          ENDIF.
+          lv_index = lv_index + 1.
+        ENDDO.
+
+        " messages are app follow-up actions: [ MESSAGE_TOAST, show, text ]
+        " and [ MESSAGE_BOX, type, text ]
+        lv_index = 1.
+        DO.
+          lv_path = |/S_FRONT/S_ACTION/T_CUSTOM/{ lv_index }|.
+          IF lo_resp->exists( lv_path ) = abap_false.
+            EXIT.
+          ENDIF.
+          DATA(lv_target) = lo_resp->get_string( |{ lv_path }/1| ).
+          IF lv_target = `MESSAGE_TOAST` OR lv_target = `MESSAGE_BOX`.
+            mv_message = lo_resp->get_string( |{ lv_path }/3| ).
+          ENDIF.
+          lv_index = lv_index + 1.
+        ENDDO.
+
+        " the full model is only sent when something bound changed - keep
+        " the last populated one so get_value stays meaningful
+        IF lo_resp->exists( `/MODEL` ).
+          DATA(lo_model) = lo_resp->slice( `/MODEL` ).
+          IF lo_model IS BOUND AND lo_model->is_empty( ) = abap_false.
+            mo_model = lo_model.
+          ENDIF.
+        ENDIF.
+
       CATCH cx_root INTO DATA(lx).
-        RAISE EXCEPTION TYPE z2ui5_cx_a2ui5_error EXPORTING val = lx.
+        RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
     ENDTRY.
-
-    IF lo_resp->exists( `/S_FRONT/ID` ).
-      mv_id = lo_resp->get_string( `/S_FRONT/ID` ).
-    ENDIF.
-
-    " the view XML is only sent when the view changed - keep the last one
-    IF lo_resp->exists( `/S_FRONT/PARAMS/S_VIEW/XML` ).
-      DATA(lv_xml) = lo_resp->get_string( `/S_FRONT/PARAMS/S_VIEW/XML` ).
-      IF lv_xml IS NOT INITIAL.
-        mv_view_xml = lv_xml.
-      ENDIF.
-    ENDIF.
-
-    IF lo_resp->exists( `/S_FRONT/PARAMS/S_MSG_TOAST/TEXT` ).
-      mv_message = lo_resp->get_string( `/S_FRONT/PARAMS/S_MSG_TOAST/TEXT` ).
-    ELSEIF lo_resp->exists( `/S_FRONT/PARAMS/S_MSG_BOX/TEXT` ).
-      mv_message = lo_resp->get_string( `/S_FRONT/PARAMS/S_MSG_BOX/TEXT` ).
-    ENDIF.
-
-    " the full model is only sent when the view updated, `{}` otherwise -
-    " keep the last populated one so get_value stays meaningful
-    IF lo_resp->exists( `/MODEL` ).
-      DATA(lo_model) = lo_resp->slice( `/MODEL` ).
-      IF lo_model IS BOUND AND lo_model->is_empty( ) = abap_false.
-        mo_model = lo_model.
-      ENDIF.
-    ENDIF.
 
   ENDMETHOD.
 

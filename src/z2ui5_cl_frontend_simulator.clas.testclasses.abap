@@ -80,7 +80,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
     TRY.
         z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_APP_DOES_NOT_EXIST` ).
         cl_abap_unit_assert=>fail( `expected an error for an unknown app` ).
-      CATCH z2ui5_cx_a2ui5_error ##NO_HANDLER.
+      CATCH z2ui5_cx_ui5_util_error ##NO_HANDLER.
     ENDTRY.
 
   ENDMETHOD.
