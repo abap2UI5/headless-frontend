@@ -34,18 +34,22 @@ CLASS z2ui5_cl_frontend_sim_example IMPLEMENTATION.
 
     me->client = client.
 
-    IF client->check_on_init( ).
+    CASE client->get_event( ).
+      WHEN `GREET`.
+        mv_greeting = |Hello { mv_name }!|.
+        client->message_toast_display( mv_greeting ).
+
+      WHEN `CLEAR`.
+        CLEAR mv_name.
+        CLEAR mv_greeting.
+    ENDCASE.
+
+    " the canonical display branch: true on the first start and whenever the
+    " app is reached again (navigation, a restored draft) - see the
+    " build-an-app guide of abap2UI5. Bound changes of an event roundtrip
+    " reach the view through the automatic model update
+    IF client->check_on_navigated( ).
       view_display( ).
-
-    ELSEIF client->check_on_event( `GREET` ).
-      mv_greeting = |Hello { mv_name }!|.
-      client->message_toast_display( mv_greeting ).
-      client->view_model_update( ).
-
-    ELSEIF client->check_on_event( `CLEAR` ).
-      CLEAR mv_name.
-      CLEAR mv_greeting.
-      client->view_model_update( ).
     ENDIF.
 
   ENDMETHOD.
@@ -53,32 +57,29 @@ CLASS z2ui5_cl_frontend_sim_example IMPLEMENTATION.
 
   METHOD view_display.
 
-    DATA(view) = z2ui5_cl_ai_xml=>factory( ).
+    DATA(view) = z2ui5_cl_ui5_view_builder=>factory( ).
 
-    view->open( n = `View` ns = `mvc`
+    view->ele( n = `View` ns = `mvc`
         )->a( n = `xmlns`     v = `sap.m`
         )->a( n = `xmlns:mvc` v = `sap.ui.core.mvc`
 
-        )->open( `Page`
+        )->ele( `Page`
             )->a( n = `title` v = `Simulator Example`
 
-            )->open( `content`
-                )->open( `VBox`
+            )->ele( `content`
+                )->ele( `VBox`
                     )->a( n = `class` v = `sapUiContentPadding`
 
-                    )->leaf( `Input`
+                    )->tag( `Input`
                         )->a( n = `value`       v = client->_bind( mv_name )
                         )->a( n = `placeholder` v = `Enter your name`
-
-                    )->leaf( `Text`
+                    )->tag( `Text`
                         )->a( n = `text`  v = client->_bind( mv_greeting )
                         )->a( n = `class` v = `sapUiSmallMarginTop`
-
-                    )->leaf( `Button`
+                    )->tag( `Button`
                         )->a( n = `text`  v = `Greet`
                         )->a( n = `press` v = client->_event( `GREET` )
-
-                    )->leaf( `Button`
+                    )->tag( `Button`
                         )->a( n = `text`  v = `Clear`
                         )->a( n = `press` v = client->_event( `CLEAR` ) ).
 

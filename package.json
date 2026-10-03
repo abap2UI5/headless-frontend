@@ -7,6 +7,7 @@
     "lint": "abaplint ./abaplint.jsonc",
     "lint:cloud": "abaplint .github/abaplint/abap_cloud.jsonc",
     "lint:702": "abaplint .github/abaplint/abap_702.jsonc",
+    "unit": "node .github/scripts/unit.mjs",
     "syfixes": "find src -type f -name '*.abap' -exec sed -i -e 's/ RAISE EXCEPTION TYPE cx_sy_itab_line_not_found/ ASSERT 1 = 0/g' {} +",
     "downport": "abaplint --fix .github/abaplint/abap_702.jsonc && npm run syfixes"
   },
