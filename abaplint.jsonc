@@ -56,6 +56,7 @@
     "definitions_top": true,
     "contains_tab": true,
     "whitespace_end": true,
+    "wrong_abapdoc_position": true,
     "sequential_blank": {
       "lines": 3
     },
