@@ -41,13 +41,13 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
     "! that names another one is refused, as the frontend refuses it.
     CONSTANTS c_protocol TYPE i VALUE 2.
 
-    "! One message the frontend would have shown - a toast or a message box.
-    "! roundtrip counts the roundtrips of this instance (1 = start( )), so a
-    "! test can tell the messages of the last click( ) from older ones.
-    "! type is the severity in the vocabulary agents and UIs share - success,
-    "! info, warning or error; method is the raw sap.m.MessageBox display
-    "! method the backend asked for (show for a toast).
     TYPES:
+      "! One message the frontend would have shown - a toast or a message box.
+      "! roundtrip counts the roundtrips of this instance (1 = start( )), so a
+      "! test can tell the messages of the last click( ) from older ones.
+      "! type is the severity in the vocabulary agents and UIs share - success,
+      "! info, warning or error; method is the raw sap.m.MessageBox display
+      "! method the backend asked for (show for a toast).
       BEGIN OF ty_s_message,
         roundtrip TYPE i,
         source    TYPE string,
@@ -59,13 +59,13 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
       END OF ty_s_message.
     TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH EMPTY KEY.
 
-    "! One open view layer. layer is a z2ui5_if_client=&gt;cs_view value
-    "! (MAIN, NEST, NEST2, POPUP, POPOVER). model is the JSON model the layer
-    "! is bound against - a nested view answers the MAIN model it inherits.
-    "! app is the class that displayed it. anchor_id is the control a popover
-    "! opens by, or the control a nested view is inserted into. roundtrip is
-    "! the roundtrip that displayed the layer.
     TYPES:
+      "! One open view layer. layer is a z2ui5_if_client=&gt;cs_view value
+      "! (MAIN, NEST, NEST2, POPUP, POPOVER). model is the JSON model the layer
+      "! is bound against - a nested view answers the MAIN model it inherits.
+      "! app is the class that displayed it. anchor_id is the control a popover
+      "! opens by, or the control a nested view is inserted into. roundtrip is
+      "! the roundtrip that displayed the layer.
       BEGIN OF ty_s_layer,
         layer     TYPE string,
         xml       TYPE string,
@@ -76,12 +76,12 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
       END OF ty_s_layer.
     TYPES ty_t_layer TYPE STANDARD TABLE OF ty_s_layer WITH EMPTY KEY.
 
-    "! One follow-up action of the last response - what the app queued with
-    "! follow_up_action( ), message_toast_display( ) and friends, run by the
-    "! frontend after rendering. name is the first array element (SET_FOCUS,
-    "! MESSAGE_TOAST, CONTROL_GLOBAL, ...), t_arg the further elements as
-    "! text (an object or array argument as its JSON), json the raw entry.
     TYPES:
+      "! One follow-up action of the last response - what the app queued with
+      "! follow_up_action( ), message_toast_display( ) and friends, run by the
+      "! frontend after rendering. name is the first array element (SET_FOCUS,
+      "! MESSAGE_TOAST, CONTROL_GLOBAL, ...), t_arg the further elements as
+      "! text (an object or array argument as its JSON), json the raw entry.
       BEGIN OF ty_s_action,
         name  TYPE string,
         t_arg TYPE string_table,
@@ -89,13 +89,13 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
       END OF ty_s_action.
     TYPES ty_t_action TYPE STANDARD TABLE OF ty_s_action WITH EMPTY KEY.
 
-    "! The browser-history intent - read-only, nothing is navigated. All
-    "! fields but routing describe the LAST response only: the options of its
-    "! ROUTER/sync action (empty when it carried no nav intent) and whether
-    "! its MAIN display played as a way back. routing is the hash-routing
-    "! mode the frontend currently holds (KEEP / FRESH / DEFAULT, empty for
-    "! none), kept across roundtrips the way the frontend keeps it.
     TYPES:
+      "! The browser-history intent - read-only, nothing is navigated. All
+      "! fields but routing describe the LAST response only: the options of its
+      "! ROUTER/sync action (empty when it carried no nav intent) and whether
+      "! its MAIN display played as a way back. routing is the hash-routing
+      "! mode the frontend currently holds (KEEP / FRESH / DEFAULT, empty for
+      "! none), kept across roundtrips the way the frontend keeps it.
       BEGIN OF ty_s_nav,
         routing               TYPE string,
         set_nav_routing       TYPE string,
@@ -463,9 +463,9 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         t_layer    TYPE ty_t_layer,
       END OF ty_s_state.
 
-    "! One edit not sent yet: the model it was made in (MAIN, POPUP or
-    "! POPOVER), the model path (array indices 0-based) and the value.
     TYPES:
+      "! One edit not sent yet: the model it was made in (MAIN, POPUP or
+      "! POPOVER), the model path (array indices 0-based) and the value.
       BEGIN OF ty_s_edit,
         model TYPE string,
         path  TYPE string,
@@ -473,9 +473,9 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
       END OF ty_s_edit.
     TYPES ty_t_edit TYPE STANDARD TABLE OF ty_s_edit WITH EMPTY KEY.
 
-    "! One row step of a table edit path (Lib.js parseDeltaSteps): the row,
-    "! the field, and whether the field is the edited leaf or a nested table.
     TYPES:
+      "! One row step of a table edit path (Lib.js parseDeltaSteps): the row,
+      "! the field, and whether the field is the edited leaf or a nested table.
       BEGIN OF ty_s_step,
         row   TYPE string,
         field TYPE string,
