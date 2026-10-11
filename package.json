@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/abap2UI5/test.git"
+    "url": "git+https://github.com/abap2UI5/headless-frontend.git"
   },
   "keywords": [
     "abap",
@@ -23,9 +23,9 @@
   ],
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/abap2UI5/test/issues"
+    "url": "https://github.com/abap2UI5/headless-frontend/issues"
   },
-  "homepage": "https://github.com/abap2UI5/test#readme",
+  "homepage": "https://github.com/abap2UI5/headless-frontend#readme",
   "devDependencies": {
     "@abaplint/cli": "^2.120.73"
   },
