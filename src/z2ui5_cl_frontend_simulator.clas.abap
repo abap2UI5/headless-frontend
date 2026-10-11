@@ -749,10 +749,7 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
     TRY.
         DATA(lo_app) = z2ui5_cl_ui5_app_cont=>db_load( mv_id ).
         mv_app = z2ui5_cl_ui5_util_context=>rtti_get_classname_by_ref( lo_app->mo_app ).
-        mv_model_last = lo_app->mv_model_client.
-        IF mv_model_last IS INITIAL.
-          mv_model_last = lo_app->model_json_stringify( ).
-        ENDIF.
+        mv_model_last = lo_app->model_json_stringify( ).
       CATCH cx_root ##NO_HANDLER.
         " the next roundtrip restores the draft itself and reports what is
         " wrong with it - this is only the read-ahead for get_value( )
