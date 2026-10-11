@@ -371,7 +371,9 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
     "! one), falling back to the last model the server sent. Reflects the
     "! model the layer holds - what the server sent, plus the values that
     "! went out with a roundtrip - not an echo of a pending set_value( ).
-    "! @parameter name  | Bound attribute / model path (e.g. `MV_NAME`).
+    "! @parameter name  | Bound attribute / model path (e.g. `MV_NAME`). A table row counts from 1, as
+    "!                     in set_cell( ) - `MT_ITEM/2/QTY` is the second row - unlike the 0-based path
+    "!                     set_json( ) takes.
     "! @parameter layer | Optional: a z2ui5_if_client=>cs_view value.
     METHODS get_value
       IMPORTING
