@@ -85,7 +85,7 @@ its rows. Nested tables get one `__delta` level per table.
 
 ### 2.1b Typed edits — **done**
 
-Asked for by the [agent addon](https://github.com/abap2UI5-addons/agent),
+Asked for by the [agent addon](https://github.com/abap2UI5-addons/abap-agent-runtime),
 which had to refuse booleans as anything but `X` / space, MultiComboBox
 arrays and edits inside a structure that also holds a table.
 `set_json( path json )` queues a raw JSON value at a model path (`set_bool( )`
@@ -133,7 +133,7 @@ stage 3 comes before it rather than after.
 
 ## Stage 3b — Sessions across requests — **done**
 
-Added for the [agent addon](https://github.com/abap2UI5-addons/agent), which
+Added for the [agent addon](https://github.com/abap2UI5-addons/abap-agent-runtime), which
 drives apps over MCP: every tool call is a separate HTTP request.
 
 - `resume( id state refresh )` continues a draft-based session in a new

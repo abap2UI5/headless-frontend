@@ -1,4 +1,4 @@
-# abap2UI5 - test
+# abap2UI5 - headless frontend
 
 **Test abap2UI5 apps in ABAP. No browser, no UI5, no HTTP.**
 
@@ -55,7 +55,7 @@ possible frontend — it is just the first one.
 A headless module that speaks this protocol is the seam where other frontends
 attach: SAP GUI, a console renderer, a REST facade, a batch driver that replays
 recorded sessions — or an AI agent. The
-[agent addon](https://github.com/abap2UI5-addons/agent) exposes abap2UI5 apps
+[agent addon](https://github.com/abap2UI5-addons/abap-agent-runtime) exposes abap2UI5 apps
 over an ABAP-native MCP endpoint and uses this simulator as its engine: every
 MCP call is one HTTP request, so it starts an app, `resume( )`s the session in
 the next request, and builds its screen snapshot from `get_layers( )`,
