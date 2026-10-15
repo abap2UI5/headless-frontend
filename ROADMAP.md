@@ -169,13 +169,19 @@ happen first. The agent addon is the first such consumer.
 
 ---
 
-## Stage 5 — Convenience — **open**
+## Stage 5 — Convenience — **partly done**
 
 Once the foundation is right:
 
-- **Record and replay.** Dump a session to JSON, replay it as a regression test.
-  Lets people write tests without writing ABAP. `get_state( )` is the start of
-  the format.
+- **Record and replay.** — **partly done**: the journey recorder of
+  abap2UI5's developer tools (Ctrl+F12, Roundtrips > Journey) records a
+  click-through in the browser and exports an ABAP Unit test class that
+  replays it here - `set_value( )` / `set_bool( )` / `set_json( )` /
+  `set_cell( )` for the model delta of each roundtrip, `click( )` for its
+  event, and assertions on the messages, the layer, the app, the ids
+  (`check_id_exists( )`) and the events (`check_event_exists( )`) of the
+  screen it reached. Still open: a JSON session dump replayed without
+  generating ABAP. `get_state( )` is the start of that format.
 - **Assertion helpers** that return the instance, so assertions chain like the
   rest of the API.
 

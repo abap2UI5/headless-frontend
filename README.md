@@ -147,6 +147,8 @@ sim->set_bool( `MV_ACTIVE`
 | `get_value( name layer )` | A value from the model of the topmost (or given) layer, falling back to the last model the server sent |
 | `get_events( layer )` | Events wired in the active (or given) layer |
 | `check_event_exists( event layer )` | Whether an event is wired in the active (or given) layer |
+| `get_ids( layer )` | Control ids (`id="..."`) the app wrote into the active (or given) layer |
+| `check_id_exists( id layer )` | Whether a control with this id is in the active (or given) layer - the assertion a recorded journey makes on the screen it reached |
 | `get_message( )` | Text of the last toast / message box of the last roundtrip |
 | `get_messages( only_last )` | All messages of the session: source (`toast` / `box`), type (`success` / `info` / `warning` / `error`), raw MessageBox method, text, title, details, roundtrip |
 | `get_actions( )` | Follow-up actions of the last response (`SET_FOCUS`, `CONTROL_BY_ID`, ...) with their arguments |
@@ -191,6 +193,13 @@ and names the ones they could. A `click( )` that names the `MAIN` layer while a
 popup is open is refused as well — a dialog is modal. It is a check on the
 view XML, not on a control tree: visibility and enablement are not evaluated,
 and events raised by timers or keyboard shortcuts are not wired in a view.
+
+`get_ids( )` and `check_id_exists( )` read the `id="..."` attributes of the
+same layers the same way - only the ids the app wrote into its view, the
+backend generates none. They are what the journey recorder of abap2UI5's
+developer tools (Ctrl+F12, Roundtrips > Journey) asserts with: it records a
+click-through in the browser and exports an ABAP Unit test that replays it on
+this simulator, checking the ids and events the recorded screens showed.
 
 ### Resuming a session
 
