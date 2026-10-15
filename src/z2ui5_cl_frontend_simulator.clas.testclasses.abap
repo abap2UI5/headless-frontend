@@ -93,6 +93,7 @@ CLASS ltcl_frontend_simulator DEFINITION FINAL
     METHODS table_cell_delta          FOR TESTING.
     METHODS row_event_arg             FOR TESTING.
     METHODS events_wired              FOR TESTING.
+    METHODS ids_in_view               FOR TESTING.
     METHODS strict_click              FOR TESTING.
     METHODS resume_with_state         FOR TESTING.
     METHODS resume_without_state      FOR TESTING.
@@ -506,6 +507,26 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = VALUE string_table( ( `POPUP_CANCEL` ) ( `POPUP_CONFIRM` ) )
                                         act = lo_sim->get_events( ) ).
     cl_abap_unit_assert=>assert_false( lo_sim->check_event_exists( `SUM` ) ).
+
+  ENDMETHOD.
+
+  METHOD ids_in_view.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+
+    " the ids the app wrote into its main view, in view order, each once
+    cl_abap_unit_assert=>assert_equals( exp = VALUE string_table( ( `nestHost` ) ( `inputName` ) ( `btnPopover` ) )
+                                        act = lo_sim->get_ids( ) ).
+    cl_abap_unit_assert=>assert_true( lo_sim->check_id_exists( `inputName` ) ).
+    cl_abap_unit_assert=>assert_false( lo_sim->check_id_exists( `input` ) ).
+
+    " a dialog is modal: the main view's ids are not reachable while it is
+    " open - unless the layer is named
+    lo_sim->click( `POPUP_OPEN` ).
+    cl_abap_unit_assert=>assert_false( lo_sim->check_id_exists( `inputName` ) ).
+    cl_abap_unit_assert=>assert_true( lo_sim->check_id_exists( id    = `inputName`
+                                                               layer = `MAIN` ) ).
+    cl_abap_unit_assert=>assert_initial( lo_sim->get_ids( ) ).
 
   ENDMETHOD.
 

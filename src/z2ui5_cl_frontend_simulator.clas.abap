@@ -327,6 +327,29 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RETURNING
         VALUE(result) TYPE string_table.
 
+    "! The control ids (id="...") of the active layer (see
+    "! check_event_exists( )), or of the given one, in view order, each once.
+    "! MAIN, NEST and NEST2 answer the main view together with its nested
+    "! views. Only the ids the app wrote into its view - a view without ids
+    "! answers an empty table.
+    "! @parameter layer | Optional: a z2ui5_if_client=>cs_view value.
+    METHODS get_ids
+      IMPORTING
+        layer         TYPE clike OPTIONAL
+      RETURNING
+        VALUE(result) TYPE string_table.
+
+    "! Whether a control with this id is in the active (or given) layer - the
+    "! assertion a recorded journey makes on the screen it reached.
+    "! @parameter id    | Control id as the app wrote it into the view.
+    "! @parameter layer | Optional: a z2ui5_if_client=>cs_view value instead of the active layer.
+    METHODS check_id_exists
+      IMPORTING
+        id            TYPE clike
+        layer         TYPE clike OPTIONAL
+      RETURNING
+        VALUE(result) TYPE abap_bool.
+
     "! View XML of the topmost open layer (popover, else popup, else the MAIN
     "! view), or of the given layer. Empty when the layer is not open.
     "! @parameter layer | Optional: a z2ui5_if_client=>cs_view value (MAIN, NEST, NEST2, POPUP, POPOVER).
@@ -652,6 +675,18 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         xml           TYPE string
       CHANGING
         ct_event      TYPE string_table.
+
+    METHODS ids_of_xml
+      IMPORTING
+        xml           TYPE string
+      CHANGING
+        ct_id         TYPE string_table.
+
+    METHODS layers_of_active
+      IMPORTING
+        layer         TYPE clike
+      RETURNING
+        VALUE(result) TYPE string_table.
 
     METHODS restore_state
       IMPORTING
@@ -1706,7 +1741,7 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD get_events.
+  METHOD layers_of_active.
 
     " a dialog is modal and a popover sits on top of whatever opened it: the
     " user reaches the topmost layer only. The MAIN view comes with the
@@ -1715,17 +1750,77 @@ CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
     IF lv_top = z2ui5_if_client=>cs_view-nested OR lv_top = z2ui5_if_client=>cs_view-nested2.
       lv_top = z2ui5_if_client=>cs_view-main.
     ENDIF.
-    DATA(lt_layer) = COND string_table(
+    result = COND string_table(
         WHEN lv_top = z2ui5_if_client=>cs_view-main
         THEN VALUE #( ( z2ui5_if_client=>cs_view-main )
                       ( z2ui5_if_client=>cs_view-nested )
                       ( z2ui5_if_client=>cs_view-nested2 ) )
         ELSE VALUE #( ( lv_top ) ) ).
 
-    LOOP AT lt_layer INTO DATA(lv_layer).
+  ENDMETHOD.
+
+  METHOD get_events.
+
+    LOOP AT layers_of_active( layer ) INTO DATA(lv_layer).
       events_of_xml( EXPORTING xml      = layer_read( lv_layer )-xml
                      CHANGING  ct_event = result ).
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD get_ids.
+
+    LOOP AT layers_of_active( layer ) INTO DATA(lv_layer).
+      ids_of_xml( EXPORTING xml   = layer_read( lv_layer )-xml
+                  CHANGING  ct_id = result ).
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD check_id_exists.
+
+    DATA lv_id TYPE string.
+    lv_id = id.
+    DATA(lt_id) = get_ids( layer ).
+    result = xsdbool( line_exists( lt_id[ table_line = lv_id ] ) ). "#EC CI_SORTSEQ
+
+  ENDMETHOD.
+
+  METHOD ids_of_xml.
+
+    " An id is the attribute id="..." of a control tag - the ids the app
+    " wrote (view->a( n = `id` v = ... )); the backend generates none. The
+    " attribute is read off the XML text, not a DOM: a view is one long
+    " line, and the attribute always starts with a blank before its name,
+    " which keeps `width="..."` or `tooltipId="..."` out
+    DATA(lv_len) = strlen( xml ).
+    DATA(lv_off) = 0.
+    DO.
+      IF lv_off >= lv_len.
+        EXIT.
+      ENDIF.
+      DATA(lv_attr) = find( val = xml
+                            sub = ` id="`
+                            off = lv_off ).
+      IF lv_attr < 0.
+        EXIT.
+      ENDIF.
+      DATA(lv_start) = lv_attr + 5.
+      DATA(lv_end) = find( val = xml
+                           sub = `"`
+                           off = lv_start ).
+      IF lv_end < 0.
+        EXIT.
+      ENDIF.
+      DATA(lv_id) = substring( val = xml
+                               off = lv_start
+                               len = lv_end - lv_start ).
+      REPLACE ALL OCCURRENCES OF `&amp;` IN lv_id WITH `&`.
+      IF lv_id IS NOT INITIAL AND NOT line_exists( ct_id[ table_line = lv_id ] ). "#EC CI_SORTSEQ
+        INSERT lv_id INTO TABLE ct_id.
+      ENDIF.
+      lv_off = lv_end + 1.
+    ENDDO.
 
   ENDMETHOD.
 
