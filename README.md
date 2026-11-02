@@ -276,7 +276,9 @@ Install with [abapGit](https://abapgit.org). Requires
 [abap2UI5](https://github.com/abap2UI5/abap2UI5) in the same system, at a
 version that speaks wire protocol 2 (`S_FRONT.S_ACTION`) — a response that
 names another protocol is refused with `PROTOCOL_MISMATCH`. Runs on ABAP
-Standard, ABAP Cloud and — via the downport in CI — 7.02.
+Standard, ABAP Cloud and 7.02: on 7.02 - 7.40 install the branch `702`, which
+`publish-702` downports from `main` on every push (with abap2UI5 from its
+`702` branch).
 
 The simulator works on the core's engine (`z2ui5_cl_ui5_handler` and the draft
 service), which is not part of abap2UI5's released API in `src/02` — a core
