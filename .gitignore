@@ -2,3 +2,7 @@ node_modules/
 .abaplint-deps/
 *.log
 .unit/
+.github/abaplint/output/
+.github/abaplint/rename-deps/
+.github/abaplint/rename_run.json
+.github/out/

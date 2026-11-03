@@ -113,7 +113,7 @@ CLASS ltcl_frontend_simulator DEFINITION FINAL
     "! The model delta of the last request as JSON - empty when it carried none.
     METHODS model_sent
       IMPORTING
-        sim           TYPE REF TO z2ui5_cl_frontend_simulator
+        sim           TYPE REF TO z2ui5_cl_frontend_sim
         path          TYPE string DEFAULT ``
       RETURNING
         VALUE(result) TYPE string.
@@ -139,7 +139,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD start_renders_view.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
 
     " a draft id was minted (would be sent back on the next request)
     cl_abap_unit_assert=>assert_not_initial( lo_sim->get_id( ) ).
@@ -155,7 +155,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD input_and_click.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
 
     lo_sim->set_value( name  = `MV_NAME`
                        value = `World` ).
@@ -173,7 +173,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD fluent_chaining.
 
-    DATA(lv_msg) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
+    DATA(lv_msg) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE`
         )->set_value( name  = `MV_NAME`
                       value = `Bob`
         )->click( `GREET`
@@ -186,7 +186,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD clear_event.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
 
     lo_sim->set_value( name  = `MV_NAME`
                        value = `World` ).
@@ -203,7 +203,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
     " a wrong app name must surface as a framework error, not a dump
     TRY.
-        z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_APP_DOES_NOT_EXIST` ).
+        z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_APP_DOES_NOT_EXIST` ).
         cl_abap_unit_assert=>fail( `expected an error for an unknown app` ).
       CATCH z2ui5_cx_ui5_util_error ##NO_HANDLER.
     ENDTRY.
@@ -214,7 +214,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
     " the example app is not sticky: every roundtrip persists a draft, and
     " the next one restores the app from it - through the in-memory store
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
     DATA(lv_first) = lo_sim->get_id( ).
     cl_abap_unit_assert=>assert_true( xsdbool( line_exists( mo_store->mt_db[ id = lv_first ] ) ) ). "#EC CI_SORTSEQ
 
@@ -234,7 +234,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD messages_kept.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
 
     lo_sim->set_value( name  = `MV_NAME`
                        value = `A` ).
@@ -267,7 +267,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD message_box_severity.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->click( `BOX` ).
 
     DATA(lt_msg) = lo_sim->get_messages( abap_true ).
@@ -289,7 +289,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD popup_flow.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->set_value( name  = `MV_NAME`
                        value = `Ann` ).
     lo_sim->click( `POPUP_OPEN` ).
@@ -321,7 +321,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD popup_cancel.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->set_value( name  = `MV_NAME`
                        value = `Ann` ).
     lo_sim->click( `POPUP_OPEN` ).
@@ -337,7 +337,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD popover_anchor.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->click( `POPOVER_OPEN` ).
 
     cl_abap_unit_assert=>assert_equals( exp = `POPOVER`
@@ -348,7 +348,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
     cl_abap_unit_assert=>assert_subrc( ).
     cl_abap_unit_assert=>assert_equals( exp = `btnPopover`
                                         act = ls_layer-anchor_id ).
-    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_SIM_LAYERS`
+    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_LAYERS`
                                         act = ls_layer-app ).
 
     lo_sim->click( `POPOVER_CLOSE` ).
@@ -358,7 +358,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD nested_view.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->set_value( name  = `MV_NAME`
                        value = `Nest` ).
     lo_sim->click( `NEST_SHOW` ).
@@ -390,7 +390,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
   METHOD main_display_closes_popup.
 
     " a new MAIN view is a new screen - the frontend takes open dialogs down
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->click( `NEST_SHOW` ).
     lo_sim->click( `POPUP_OPEN` ).
     lo_sim->click( `REFRESH` ).
@@ -404,14 +404,14 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD app_switch.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
-    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_SIM_LAYERS`
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
+    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_LAYERS`
                                         act = lo_sim->get_app( ) ).
     lo_sim->click( `POPUP_OPEN` ).
 
     " nav_app_call: the called app answers, the caller's dialog is gone
     lo_sim->click( `NAV` ).
-    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
+    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_EXAMPLE`
                                         act = lo_sim->get_app( ) ).
     cl_abap_unit_assert=>assert_initial( lo_sim->get_popup( ) ).
     cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_view( ) CS `Simulator Example` ) ).
@@ -426,7 +426,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD follow_up_action.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->click( `FOCUS` ).
 
     DATA(lt_action) = lo_sim->get_actions( ).
@@ -448,7 +448,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD nav_app_state.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     cl_abap_unit_assert=>assert_false( lo_sim->get_nav( )-set_app_state_active ).
 
     lo_sim->click( `APP_STATE` ).
@@ -462,7 +462,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD table_cell_delta.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->set_cell( table  = `MT_ITEM`
                       row    = 2
                       column = `QTY`
@@ -479,7 +479,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD row_event_arg.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->click( event = `ROW`
                    t_arg = VALUE #( ( `Bananas` ) ) ).
 
@@ -490,7 +490,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD events_wired.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
 
     cl_abap_unit_assert=>assert_true( lo_sim->check_event_exists( `POPUP_OPEN` ) ).
     cl_abap_unit_assert=>assert_true( lo_sim->check_event_exists( `ROW` ) ).
@@ -512,7 +512,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD ids_in_view.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
 
     " the ids the app wrote into its main view, in view order, each once
     cl_abap_unit_assert=>assert_equals( exp = VALUE string_table( ( `nestHost` ) ( `inputName` ) ( `btnPopover` ) )
@@ -532,7 +532,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD strict_click.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE`
         )->set_check_events( ).
 
     TRY.
@@ -556,7 +556,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
   METHOD resume_with_state.
 
     " request 1: start, open the popup, hand over id and state
-    DATA(lo_first) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_first) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_first->set_value( name  = `MV_NAME`
                          value = `Res` ).
     lo_first->click( `POPUP_OPEN` ).
@@ -564,7 +564,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
     DATA(lv_state) = lo_first->get_state( ).
 
     " request 2: a new instance continues where the first one stopped
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>resume( id    = lv_id
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>resume( id    = lv_id
                                                         state = lv_state ).
     cl_abap_unit_assert=>assert_equals( exp = lv_id
                                         act = lo_sim->get_id( ) ).
@@ -572,7 +572,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
                                         act = lo_sim->get_layer( ) ).
     cl_abap_unit_assert=>assert_equals( exp = lo_first->get_popup( )
                                         act = lo_sim->get_popup( ) ).
-    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_SIM_LAYERS`
+    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_LAYERS`
                                         act = lo_sim->get_app( ) ).
     cl_abap_unit_assert=>assert_equals( exp = 0
                                         act = lo_sim->get_roundtrip( ) ).
@@ -589,14 +589,14 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD resume_without_state.
 
-    DATA(lo_first) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_first) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
     lo_first->set_value( name  = `MV_NAME`
                          value = `Draft` ).
     lo_first->click( `GREET` ).
 
     " the draft knows the app and its model, not the view
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>resume( lo_first->get_id( ) ).
-    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>resume( lo_first->get_id( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Z2UI5_CL_FRONTEND_EXAMPLE`
                                         act = lo_sim->get_app( ) ).
     cl_abap_unit_assert=>assert_equals( exp = `Hello Draft!`
                                         act = lo_sim->get_value( `MV_GREETING` ) ).
@@ -613,7 +613,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD resume_refresh.
 
-    DATA(lo_first) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_first) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
     lo_first->set_value( name  = `MV_NAME`
                          value = `Reload` ).
     lo_first->click( `GREET` ).
@@ -621,7 +621,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
     " the reload of a routed app: the draft is restored, check_on_navigated
     " re-displays the view - under a new draft id
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>resume( id      = lv_id
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>resume( id      = lv_id
                                                         refresh = abap_true ).
     cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_view( ) CS `Greet` ) ).
     cl_abap_unit_assert=>assert_differs( exp = lv_id
@@ -635,18 +635,18 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
   METHOD resume_errors.
 
     TRY.
-        z2ui5_cl_frontend_simulator=>resume( `00000000000000000000000000000000` ).
+        z2ui5_cl_frontend_sim=>resume( `00000000000000000000000000000000` ).
         cl_abap_unit_assert=>fail( `expected an error for an unknown draft` ).
       CATCH z2ui5_cx_ui5_util_error INTO DATA(lx).
         cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `RESUME_NO_DRAFT` ) ).
     ENDTRY.
 
     " a state of an older roundtrip does not fit the current draft
-    DATA(lo_first) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_first) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
     DATA(lv_state) = lo_first->get_state( ).
     lo_first->click( `CLEAR` ).
     TRY.
-        z2ui5_cl_frontend_simulator=>resume( id    = lo_first->get_id( )
+        z2ui5_cl_frontend_sim=>resume( id    = lo_first->get_id( )
                                              state = lv_state ).
         cl_abap_unit_assert=>fail( `expected an error for a stale state` ).
       CATCH z2ui5_cx_ui5_util_error INTO lx.
@@ -657,7 +657,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD sticky_session.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     cl_abap_unit_assert=>assert_false( lo_sim->is_sticky( ) ).
     lo_sim->click( `STICKY` ).
     cl_abap_unit_assert=>assert_true( lo_sim->is_sticky( ) ).
@@ -674,7 +674,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
     " ... and cannot be resumed in another one
     TRY.
-        z2ui5_cl_frontend_simulator=>resume( lo_sim->get_id( ) ).
+        z2ui5_cl_frontend_sim=>resume( lo_sim->get_id( ) ).
         cl_abap_unit_assert=>fail( `expected an error for a sticky session` ).
       CATCH z2ui5_cx_ui5_util_error INTO DATA(lx).
         cl_abap_unit_assert=>assert_true( xsdbool( lx->get_text( ) CS `sticky` ) ).
@@ -698,7 +698,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD typed_bool.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_FORM` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_FORM` ).
 
     " a CheckBox sends a boolean, the core turns it into abap_true
     lo_sim->set_bool( `MV_ACTIVE` )->click( `CHECK` ).
@@ -720,7 +720,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD typed_multichoice.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_FORM` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_FORM` ).
 
     " MultiComboBox selectedKeys: an array, sent as the whole attribute
     lo_sim->set_json( path = `MT_KEY`
@@ -748,7 +748,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD structure_with_table.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_FORM` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_FORM` ).
 
     " a field of a structure: the whole structure goes out, its table with it
     lo_sim->set_value( name  = `MS_ORDER/NAME`
@@ -787,7 +787,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD row_selection.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_FORM` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_FORM` ).
 
     " a MultiSelect table writes its selection into the column its items
     " bind selected to - boolean cells, one row delta with the typed row
@@ -819,7 +819,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD nested_table_delta.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_FORM` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_FORM` ).
 
     " a cell of a table inside a table row: one __delta level per table
     lo_sim->set_json( path = `MT_ROW/2/T_SUB/1/QTY`
@@ -833,7 +833,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD delta_rules.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
 
     " a whole table queued next to a cell of it carries the cell - it wins,
     " in either order (Lib.buildDeltaFromPaths)
@@ -896,7 +896,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD edits_per_layer.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->click( `POPOVER_OPEN` ).
 
     " typed into the popover's own model - an event of the main view does
@@ -958,7 +958,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD close_layer_locally.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     lo_sim->click( `POPUP_OPEN` ).
     lo_sim->set_value( name  = `MV_POPUP_TEXT`
                        value = `Lost` ).
@@ -973,7 +973,7 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
     cl_abap_unit_assert=>assert_initial( lo_sim->get_popup( ) ).
 
     " ... and the state handed to the next request says so
-    DATA(lo_next) = z2ui5_cl_frontend_simulator=>resume( id    = lo_sim->get_id( )
+    DATA(lo_next) = z2ui5_cl_frontend_sim=>resume( id    = lo_sim->get_id( )
                                                          state = lo_sim->get_state( ) ).
     cl_abap_unit_assert=>assert_equals( exp = `MAIN`
                                         act = lo_next->get_layer( ) ).
@@ -1002,8 +1002,8 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
 
   METHOD typed_errors.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
-    cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_request_json( ) CS `app_start=Z2UI5_CL_FRONTEND_SIM_LAYERS` ) ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_request_json( ) CS `app_start=Z2UI5_CL_FRONTEND_LAYERS` ) ).
 
     TRY.
         lo_sim->set_json( path = `MV_NAME`
@@ -1070,7 +1070,7 @@ CLASS ltcl_frontend_simulator_db DEFINITION FINAL
 
     METHODS track
       IMPORTING
-        sim TYPE REF TO z2ui5_cl_frontend_simulator.
+        sim TYPE REF TO z2ui5_cl_frontend_sim.
 
     METHODS marker_insert.
 
@@ -1127,7 +1127,7 @@ CLASS ltcl_frontend_simulator_db IMPLEMENTATION.
 
   METHOD draft_persisted.
 
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
     track( lo_sim ).
     lo_sim->set_value( name  = `MV_NAME`
                        value = `Db` ).
@@ -1151,7 +1151,7 @@ CLASS ltcl_frontend_simulator_db IMPLEMENTATION.
 
     " start( ) itself commits (draft cleanup + save), so the marker is
     " written afterwards - the click must roll it back before main( ) runs
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
     track( lo_sim ).
     marker_insert( ).
     cl_abap_unit_assert=>assert_true( marker_exists( ) ).
@@ -1166,7 +1166,7 @@ CLASS ltcl_frontend_simulator_db IMPLEMENTATION.
   METHOD sticky_skips_rollback.
 
     " a sticky app keeps its handler and its LUW - no rollback, no save
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
     track( lo_sim ).
     lo_sim->click( `STICKY` ).
     track( lo_sim ).
@@ -1182,7 +1182,7 @@ CLASS ltcl_frontend_simulator_db IMPLEMENTATION.
   METHOD resume_across_requests.
 
     " request 1
-    DATA(lo_first) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+    DATA(lo_first) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
     track( lo_first ).
     lo_first->set_value( name  = `MV_NAME`
                          value = `Persisted` ).
@@ -1193,7 +1193,7 @@ CLASS ltcl_frontend_simulator_db IMPLEMENTATION.
     CLEAR lo_first.
 
     " request 2 - nothing but the id and the state survived
-    DATA(lo_sim) = z2ui5_cl_frontend_simulator=>resume( id    = lv_id
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>resume( id    = lv_id
                                                         state = lv_state ).
     lo_sim->click( `GREET` ).
     track( lo_sim ).

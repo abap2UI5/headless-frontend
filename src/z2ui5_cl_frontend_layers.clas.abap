@@ -1,6 +1,6 @@
-"! Second example app for z2ui5_cl_frontend_simulator - every view layer.
+"! Second example app for z2ui5_cl_frontend_sim - every view layer.
 "!
-"! Where z2ui5_cl_frontend_sim_example is the minimal session, this app
+"! Where z2ui5_cl_frontend_example is the minimal session, this app
 "! exists to exercise the parts of the protocol a realistic app uses: a
 "! popup with its own input, a popover anchored to a button, a nested view
 "! inserted into the main view, a follow-up action, a message box with a
@@ -16,7 +16,7 @@
 "! Events: POPUP_OPEN, POPUP_CONFIRM, POPUP_CANCEL, POPOVER_OPEN,
 "! POPOVER_CLOSE, NEST_SHOW, NEST_HIDE, FOCUS, BOX, SUM, ROW, REFRESH,
 "! APP_STATE, STICKY, NAV.
-CLASS z2ui5_cl_frontend_sim_layers DEFINITION PUBLIC.
+CLASS z2ui5_cl_frontend_layers DEFINITION PUBLIC.
 
   PUBLIC SECTION.
     INTERFACES z2ui5_if_app.
@@ -47,7 +47,7 @@ CLASS z2ui5_cl_frontend_sim_layers DEFINITION PUBLIC.
 ENDCLASS.
 
 
-CLASS z2ui5_cl_frontend_sim_layers IMPLEMENTATION.
+CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
 
   METHOD z2ui5_if_app~main.
 
@@ -125,7 +125,7 @@ CLASS z2ui5_cl_frontend_sim_layers IMPLEMENTATION.
         client->set_session_stateful( ).
 
       WHEN `NAV`.
-        client->nav_app_call( NEW z2ui5_cl_frontend_sim_example( ) ).
+        client->nav_app_call( NEW z2ui5_cl_frontend_example( ) ).
 
     ENDCASE.
 

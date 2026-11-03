@@ -1,6 +1,6 @@
-"! Third example app for z2ui5_cl_frontend_simulator - typed edits.
+"! Third example app for z2ui5_cl_frontend_sim - typed edits.
 "!
-"! Where z2ui5_cl_frontend_sim_example types text, this app exists for the
+"! Where z2ui5_cl_frontend_example types text, this app exists for the
 "! values a browser sends as something else: a CheckBox sends a boolean, a
 "! MultiComboBox an array of keys, a structure that holds a table travels
 "! as one whole value, and a selectable table writes its selection into a
@@ -16,7 +16,7 @@
 "!   MV_RESULT        - what the last event computed        ( _bind )
 "! Events: CHECK, KEYS, ORDER, ROWS - each writes MV_RESULT and shows it
 "! as a toast.
-CLASS z2ui5_cl_frontend_sim_form DEFINITION PUBLIC.
+CLASS z2ui5_cl_frontend_form DEFINITION PUBLIC.
 
   PUBLIC SECTION.
     INTERFACES z2ui5_if_app.
@@ -66,7 +66,7 @@ CLASS z2ui5_cl_frontend_sim_form DEFINITION PUBLIC.
 ENDCLASS.
 
 
-CLASS z2ui5_cl_frontend_sim_form IMPLEMENTATION.
+CLASS z2ui5_cl_frontend_form IMPLEMENTATION.
 
   METHOD z2ui5_if_app~main.
 
