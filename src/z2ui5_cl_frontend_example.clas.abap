@@ -1,8 +1,8 @@
-"! Example app for z2ui5_cl_frontend_simulator.
+"! Example app for z2ui5_cl_frontend_sim.
 "!
 "! A minimal, self-contained abap2UI5 app - one input, one output text and two
 "! buttons - that exists purely to be driven by the headless simulator. Its
-"! unit tests (in z2ui5_cl_frontend_simulator.clas.testclasses) show how a
+"! unit tests (in z2ui5_cl_frontend_sim.clas.testclasses) show how a
 "! full user session - type a name, press a button, read the result back - is
 "! reproduced on the server without a browser.
 "!
@@ -11,7 +11,7 @@
 "!   MV_GREETING - the output text      ( _bind )
 "!   GREET       - build+show greeting  ( _event )
 "!   CLEAR       - reset both fields    ( _event )
-CLASS z2ui5_cl_frontend_sim_example DEFINITION PUBLIC.
+CLASS z2ui5_cl_frontend_example DEFINITION PUBLIC.
 
   PUBLIC SECTION.
     INTERFACES z2ui5_if_app.
@@ -28,7 +28,7 @@ CLASS z2ui5_cl_frontend_sim_example DEFINITION PUBLIC.
 ENDCLASS.
 
 
-CLASS z2ui5_cl_frontend_sim_example IMPLEMENTATION.
+CLASS z2ui5_cl_frontend_example IMPLEMENTATION.
 
   METHOD z2ui5_if_app~main.
 

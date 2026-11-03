@@ -9,7 +9,7 @@
 "! actions and the browser-history intent recorded.
 "!
 "! Typical use in an ABAP Unit test:
-"!   DATA(sim) = z2ui5_cl_frontend_simulator=&gt;start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+"!   DATA(sim) = z2ui5_cl_frontend_sim=&gt;start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
 "!   sim-&gt;set_value( name = `MV_NAME` value = `World` ).
 "!   sim-&gt;click( `GREET` ).
 "!   cl_abap_unit_assert=&gt;assert_equals( exp = `Hello World!`
@@ -32,7 +32,7 @@
 "! session from its draft id in a new instance - a new HTTP request, a new
 "! work process - which is what a stateless driver (an MCP endpoint, a
 "! batch replay) needs. Sticky apps keep no draft and cannot be resumed.
-CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
+CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
   PUBLIC SECTION.
 
@@ -112,13 +112,13 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
     "! Start an app - one roundtrip without an id, mirroring the browser's
     "! first POST with ?app_start=&lt;class name&gt;.
-    "! @parameter app    | Global class name of the app to start (e.g. `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`).
+    "! @parameter app    | Global class name of the app to start (e.g. `Z2UI5_CL_FRONTEND_EXAMPLE`).
     "! @parameter result | The simulator instance, holding the first response.
     CLASS-METHODS start
       IMPORTING
         app           TYPE clike
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Continue a draft-based session in a new instance - typically in a new
     "! request. The draft must exist for the current user; it does not for a
@@ -144,7 +144,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         state         TYPE clike     OPTIONAL
         refresh       TYPE abap_bool DEFAULT abap_false
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Set a value into the model delta of the NEXT roundtrip - the equivalent
     "! of typing into a bound input. No roundtrip happens yet; the value is sent
@@ -160,7 +160,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         value         TYPE clike
         layer         TYPE clike OPTIONAL
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Set a raw JSON value at a model path into the delta of the NEXT
     "! roundtrip - what a two-way binding writes into the browser's model: a
@@ -187,7 +187,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         json          TYPE clike
         layer         TYPE clike OPTIONAL
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Set a boolean into the delta of the NEXT roundtrip - a CheckBox or a
     "! Switch, sent as JSON true / false like the browser sends it.
@@ -201,7 +201,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         value         TYPE abap_bool DEFAULT abap_true
         layer         TYPE clike     OPTIONAL
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Set one cell of a bound table into the delta of the NEXT roundtrip - the
     "! equivalent of typing into an input of a table row. Sent the way the
@@ -221,7 +221,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         value         TYPE clike
         layer         TYPE clike OPTIONAL
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Set several cells of one table row into the delta of the NEXT
     "! roundtrip - every member of a JSON object is one cell, typed in column
@@ -238,7 +238,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         json          TYPE clike
         layer         TYPE clike OPTIONAL
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Select or deselect a table row - what a MultiSelect / SingleSelect
     "! table writes into the column its items bind selected to: a boolean
@@ -257,7 +257,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         selected      TYPE abap_bool DEFAULT abap_true
         layer         TYPE clike     OPTIONAL
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Close a layer in the browser only - what a frontend event does
     "! (_event_client( cs_event-popup_close ), the VIEW_SLOTS destroy action):
@@ -270,7 +270,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
       IMPORTING
         layer         TYPE clike
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Fire an event - the equivalent of clicking a button. Sends the pending
     "! edits of the firing layer's model together with the event and parses
@@ -288,7 +288,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
         t_arg         TYPE string_table OPTIONAL
         layer         TYPE clike        OPTIONAL
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Opt-in validation of click( ): with abap_true, an event that is not
     "! wired in the active layer raises z2ui5_cx_ui5_util_error naming the
@@ -301,7 +301,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
       IMPORTING
         val           TYPE abap_bool DEFAULT abap_true
       RETURNING
-        VALUE(result) TYPE REF TO z2ui5_cl_frontend_simulator.
+        VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
     "! Whether the event is wired (client->_event( )) in the active layer -
     "! the topmost one: an open popover, else an open popup, else the MAIN view
@@ -703,7 +703,7 @@ CLASS z2ui5_cl_frontend_simulator DEFINITION PUBLIC FINAL CREATE PRIVATE.
 ENDCLASS.
 
 
-CLASS z2ui5_cl_frontend_simulator IMPLEMENTATION.
+CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD start.
 

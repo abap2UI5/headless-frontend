@@ -3,9 +3,9 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <VSEOCLASS>
-    <CLSNAME>Z2UI5_CL_FRONTEND_SIM_EXAMPLE</CLSNAME>
+    <CLSNAME>Z2UI5_CL_FRONTEND_LAYERS</CLSNAME>
     <LANGU>E</LANGU>
-    <DESCRIPT>Example app driven by the frontend simulator</DESCRIPT>
+    <DESCRIPT>Example app with popup, popover and nested view</DESCRIPT>
     <STATE>1</STATE>
     <CLSCCINCL>X</CLSCCINCL>
     <FIXPT>X</FIXPT>

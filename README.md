@@ -8,13 +8,13 @@ an event id, the backend sends back view-lifecycle actions, a model and
 follow-up actions. That is the entire contract.
 
 This repo takes that contract seriously and plays the other side of it in ABAP.
-`z2ui5_cl_frontend_simulator` builds the same request the UI5 frontend builds,
+`z2ui5_cl_frontend_sim` builds the same request the UI5 frontend builds,
 hands it to `z2ui5_cl_ui5_handler`, and replays the response the way the
 frontend does — all in the same session, in the same call stack, in a plain
 ABAP Unit test.
 
 ```abap
-DATA(sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE` ).
+DATA(sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
 
 sim->set_value( name = `MV_NAME` value = `World` ).
 sim->click( `GREET` ).
@@ -88,7 +88,7 @@ The setters, `close_layer( )`, `click( )` and `set_check_events( )` return the
 instance, so a whole session fits in one statement:
 
 ```abap
-DATA(msg) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_EXAMPLE`
+DATA(msg) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE`
     )->set_value( name  = `MV_NAME`
                   value = `World`
     )->click( `GREET`
@@ -209,13 +209,13 @@ another request, another work process:
 
 ```abap
 " request 1
-DATA(sim) = z2ui5_cl_frontend_simulator=>start( `Z2UI5_CL_FRONTEND_SIM_LAYERS` ).
+DATA(sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_LAYERS` ).
 sim->click( `POPUP_OPEN` ).
 DATA(id)    = sim->get_id( ).
 DATA(state) = sim->get_state( ).
 
 " request 2
-sim = z2ui5_cl_frontend_simulator=>resume( id = id state = state ).
+sim = z2ui5_cl_frontend_sim=>resume( id = id state = state ).
 sim->set_value( name = `MV_POPUP_TEXT` value = `Bea` )->click( `POPUP_CONFIRM` ).
 ```
 
@@ -253,13 +253,22 @@ makes, so what you test is what runs in production.
 
 | Object | Description |
 | --- | --- |
-| `z2ui5_cl_frontend_simulator` | The simulator |
-| `z2ui5_cl_frontend_sim_example` | Minimal app — one input, one text, two buttons — that exists to be driven by it |
-| `z2ui5_cl_frontend_sim_layers` | Example app with every layer: popup, popover, nested view, an editable table, follow-up actions, a message box, app-state hash, `nav_app_call( )` and the switch to a sticky session |
-| `z2ui5_cl_frontend_sim_form` | Example app for typed edits: a CheckBox, a MultiComboBox, a structure that holds a table, a selectable table with a nested table in its rows |
+| `z2ui5_cl_frontend_sim` | The simulator |
+| `z2ui5_cl_frontend_example` | Minimal app — one input, one text, two buttons — that exists to be driven by it |
+| `z2ui5_cl_frontend_layers` | Example app with every layer: popup, popover, nested view, an editable table, follow-up actions, a message box, app-state hash, `nav_app_call( )` and the switch to a sticky session |
+| `z2ui5_cl_frontend_form` | Example app for typed edits: a CheckBox, a MultiComboBox, a structure that holds a table, a selectable table with a nested table in its rows |
+
+**Renamed (2026-11).** The classes are at most 25 characters long now, so
+that a namespace rename of up to 10 characters fits the 30-character limit:
+`z2ui5_cl_frontend_simulator` is `z2ui5_cl_frontend_sim`, and the example apps
+`z2ui5_cl_frontend_sim_example`, `_sim_layers` and `_sim_form` are
+`z2ui5_cl_frontend_example`, `_layers` and `_form`. The public API is
+unchanged; replace the name in your test classes (the ones abap2UI5's
+developer tools generate use the new name) and delete the old classes after
+the pull.
 
 The simulator's own unit tests live in
-`z2ui5_cl_frontend_simulator.clas.testclasses.abap` and drive both example
+`z2ui5_cl_frontend_sim.clas.testclasses.abap` and drive both example
 apps and the form app. They double as the usage documentation:
 
 - `ltcl_frontend_simulator` (`RISK LEVEL HARMLESS`) installs an in-memory draft
@@ -283,6 +292,16 @@ Standard, ABAP Cloud and 7.02: on 7.02 - 7.40 install the branch `702`, which
 The simulator works on the core's engine (`z2ui5_cl_ui5_handler` and the draft
 service), which is not part of abap2UI5's released API in `src/02` — a core
 change there can require a change here.
+
+### Parallel installation (namespace rename)
+
+To run a second copy next to the original in the same system, rename it the
+way abap2UI5 itself is renamed: run the workflow **build-rename** (Actions →
+build-rename → Run workflow) with the name your abap2UI5 installation was
+renamed to - e.g. `ZMYUI5` or `/CA2UI5/`. It pushes the branch `rename_<name>`, in
+which every object and every reference to abap2UI5 and to the addons this one
+needs carries that name; pull it with abapGit. Rename abap2UI5 and every addon
+of the installation with the same name.
 
 ## Current scope
 
