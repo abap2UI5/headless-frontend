@@ -26,7 +26,7 @@ CLASS z2ui5_cl_frontend_layers DEFINITION PUBLIC.
         name TYPE string,
         qty  TYPE i,
       END OF ty_s_item.
-    TYPES ty_t_item TYPE STANDARD TABLE OF ty_s_item WITH EMPTY KEY.
+    TYPES ty_t_item TYPE STANDARD TABLE OF ty_s_item WITH DEFAULT KEY.
 
     DATA mv_name       TYPE string.
     DATA mv_popup_text TYPE string.
@@ -50,18 +50,30 @@ ENDCLASS.
 CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
 
   METHOD z2ui5_if_app~main.
+      DATA temp1 TYPE z2ui5_cl_frontend_layers=>ty_t_item.
+      DATA temp2 LIKE LINE OF temp1.
 
     me->client = client.
 
-    IF client->check_on_init( ).
-      mt_item = VALUE #( ( name = `Apples`  qty = 1 )
-                         ( name = `Bananas` qty = 2 )
-                         ( name = `Cherries` qty = 3 ) ).
+    IF client->check_on_init( ) IS NOT INITIAL.
+
+      CLEAR temp1.
+
+      temp2-name = `Apples`.
+      temp2-qty = 1.
+      INSERT temp2 INTO TABLE temp1.
+      temp2-name = `Bananas`.
+      temp2-qty = 2.
+      INSERT temp2 INTO TABLE temp1.
+      temp2-name = `Cherries`.
+      temp2-qty = 3.
+      INSERT temp2 INTO TABLE temp1.
+      mt_item = temp1.
     ENDIF.
 
     on_event( ).
 
-    IF client->check_on_navigated( ).
+    IF client->check_on_navigated( ) IS NOT INITIAL.
       view_display( ).
     ENDIF.
 
@@ -69,6 +81,9 @@ CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
 
 
   METHOD on_event.
+        DATA temp3 TYPE string_table.
+        DATA ls_item LIKE LINE OF mt_item.
+        DATA temp5 TYPE REF TO z2ui5_cl_frontend_example.
 
     CASE client->get_event( ).
 
@@ -97,8 +112,11 @@ CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
         client->nest_view_destroy( ).
 
       WHEN `FOCUS`.
+
+        CLEAR temp3.
+        INSERT `inputName` INTO TABLE temp3.
         client->follow_up_action( val   = client->cs_event-set_focus
-                                  t_arg = VALUE #( ( `inputName` ) ) ).
+                                  t_arg = temp3 ).
 
       WHEN `BOX`.
         client->message_box_display( text  = `Something went wrong`
@@ -107,7 +125,8 @@ CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
 
       WHEN `SUM`.
         mv_total = 0.
-        LOOP AT mt_item INTO DATA(ls_item).
+
+        LOOP AT mt_item INTO ls_item.
           mv_total = mv_total + ls_item-qty.
         ENDLOOP.
         client->message_toast_display( |Total { mv_total }| ).
@@ -125,7 +144,9 @@ CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
         client->set_session_stateful( ).
 
       WHEN `NAV`.
-        client->nav_app_call( NEW z2ui5_cl_frontend_example( ) ).
+
+        CREATE OBJECT temp5 TYPE z2ui5_cl_frontend_example.
+        client->nav_app_call( temp5 ).
 
     ENDCASE.
 
@@ -134,8 +155,13 @@ CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
 
   METHOD view_display.
 
-    DATA(view) = z2ui5_cl_ui5_view_builder=>factory( ).
+    DATA view TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA temp6 TYPE string_table.
+    view = z2ui5_cl_ui5_view_builder=>factory( ).
 
+
+    CLEAR temp6.
+    INSERT `${NAME}` INTO TABLE temp6.
     view->ele( n = `View` ns = `mvc`
         )->a( n = `xmlns`     v = `sap.m`
         )->a( n = `xmlns:mvc` v = `sap.ui.core.mvc`
@@ -196,7 +222,7 @@ CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
                             )->ele( `ColumnListItem`
                                 )->a( n = `type`  v = `Navigation`
                                 )->a( n = `press` v = client->_event( val   = `ROW`
-                                                                      t_arg = VALUE #( ( `${NAME}` ) ) )
+                                                                      t_arg = temp6 )
 
                                 )->ele( `cells`
 
@@ -212,7 +238,8 @@ CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
 
   METHOD popup_display.
 
-    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory( ).
+    DATA popup TYPE REF TO z2ui5_cl_ui5_view_builder.
+    popup = z2ui5_cl_ui5_view_builder=>factory( ).
 
     popup->ele( n = `FragmentDefinition` ns = `core`
         )->a( n = `xmlns`      v = `sap.m`
@@ -244,7 +271,8 @@ CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
 
   METHOD popover_display.
 
-    DATA(popover) = z2ui5_cl_ui5_view_builder=>factory( ).
+    DATA popover TYPE REF TO z2ui5_cl_ui5_view_builder.
+    popover = z2ui5_cl_ui5_view_builder=>factory( ).
 
     popover->ele( n = `FragmentDefinition` ns = `core`
         )->a( n = `xmlns`      v = `sap.m`
@@ -267,7 +295,8 @@ CLASS z2ui5_cl_frontend_layers IMPLEMENTATION.
 
   METHOD nest_display.
 
-    DATA(nest) = z2ui5_cl_ui5_view_builder=>factory( ).
+    DATA nest TYPE REF TO z2ui5_cl_ui5_view_builder.
+    nest = z2ui5_cl_ui5_view_builder=>factory( ).
 
     nest->ele( n = `View` ns = `mvc`
         )->a( n = `xmlns`     v = `sap.m`
