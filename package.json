@@ -37,6 +37,11 @@
     "@abaplint/cli": "^2.120.92",
     "@abaplint/transpiler-cli": "2.14.5"
   },
+  "updateDeps": {
+    "skip": {
+      "@abaplint/transpiler-cli": "has to be the version @abap2ui5/node-runtime was built with (abap2ui5.transpiler in its package.json): update-deps.mjs looks for a top-level \"transpiler\" there, finds none and would move this to the latest. When a bump of the runtime names another transpiler, the unit run refuses and prints the install command"
+    }
+  },
   "engines": {
     "node": ">=22"
   }
