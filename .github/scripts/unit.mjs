@@ -6,23 +6,24 @@
  *
  * The framework is not built here. abap2UI5 downports and transpiles itself
  * and publishes the result as the npm package @abap2ui5/node-runtime; this
- * script takes that package (a devDependency, pinned exactly) and adds this
- * repository's classes to it - "Your own apps" in the package's README:
+ * script takes that package (a devDependency, pinned exactly) and has it add
+ * this repository's classes - "Your own unit tests" in the package's README,
+ * `abap2ui5-transpile src <out> --unit-tests` as a function:
  *
- *   1. open-abap-core and express-icf-shim checked out at the commits the
- *      package records (ensureCheckout( ) of its setup/transpile.mjs), once,
- *      under UNIT_DIR/deps
- *   2. the transpile config of the package (transpileConfig( )): src/ and
- *      the package's downport/ - the framework's ABAP, from the release
- *      commit - as the two inputs, and the unit tests switched on. The
- *      package ships no test classes of the framework, so the generated
- *      runner holds this repository's and nothing else
- *   3. transpile( ): the transpiler the package names
+ *   1. transpile( ) of the package's setup/transpile.mjs with
+ *      `unitTests: true` - open-abap-core and express-icf-shim at the commits
+ *      the package records (once, under
+ *      node_modules/.cache/abap2ui5-node-runtime), src/ and the package's
+ *      downport/ - the framework's ABAP, from the release commit - in one
+ *      transpile into UNIT_DIR/output, with the transpiler the package names
  *      (@abaplint/transpiler-cli, a devDependency at exactly that version -
- *      another one is refused), one transpile of everything into
- *      UNIT_DIR/output. About 15 seconds
- *   4. the generated tests - all risk levels - each one reported, exit code
- *      1 on any failure or when no test ran at all
+ *      another one is refused) and its ABAP Unit runner. The package ships no
+ *      test classes of the framework, so the generated runner holds this
+ *      repository's and nothing else. About 15 seconds
+ *   2. the generated tests - all risk levels - each one reported, exit code
+ *      1 on any failure or when no test ran at all. The transpiler's own
+ *      runner (UNIT_DIR/output/index.mjs) stops at the first failure and
+ *      knows no filter, so its list of tests is run by the runner below
  *
  *   npm ci
  *   npm run unit
@@ -30,7 +31,8 @@
  *
  * Environment:
  *   UNIT_DIR     the work folder (default .unit, git-ignored), below the
- *                repository - the transpiler reads every folder relative to it
+ *                repository - the transpiler reads every folder relative to it.
+ *                Its output/ is emptied before every transpile
  *   UNIT_FILTER  run only the tests whose "OBJECT: class->method" contains it
  *
  * The framework under test is the release in package.json, not abap2UI5's
@@ -66,7 +68,9 @@ function fail(message) {
   process.exit(1);
 }
 
-// 1. the package and what it was built with
+// 1. the package, and one transpile of the framework and this repository
+// with the unit tests switched on - the package checks the transpiler's
+// version, fetches the two libraries and writes the config
 const require = createRequire(path.join(ROOT, "package.json"));
 let manifest;
 try {
@@ -75,55 +79,23 @@ try {
   fail(`${CONFIG.runtime} is not installed - run \`npm ci\` first`);
 }
 const built = manifest.abap2ui5 || {};
-for (const key of ["transpiler", "openAbapCore", "expressIcfShim"]) {
-  if (!built[key]) fail(`${CONFIG.runtime} ${manifest.version} does not record abap2ui5.${key} - a release from 1.148.0 on does`);
-}
-const { transpile, transpileConfig, ensureCheckout, OPEN_ABAP_CORE_URL, EXPRESS_ICF_SHIM_URL } = await import(`${CONFIG.runtime}/setup/transpile.mjs`);
+const { transpile } = await import(`${CONFIG.runtime}/setup/transpile.mjs`);
 console.log(`${CONFIG.runtime} ${manifest.version} (abap2UI5 @ ${built.commit}, transpiler ${built.transpiler})`);
 
-// 2. the two libraries of the transpile, at the commits the package was
-// built with - a folder per commit, so a bump of the package fetches the new
-// ones; an interrupted fetch is noticed (HEAD is not the commit) and redone
-const LIBRARIES = [
-  { name: "open-abap-core", url: OPEN_ABAP_CORE_URL, recorded: "openAbapCore" },
-  { name: "express-icf-shim", url: EXPRESS_ICF_SHIM_URL, recorded: "expressIcfShim" },
-];
-const libs = {};
-for (const library of LIBRARIES) {
-  const commit = built[library.recorded];
-  const dir = path.join(WORK, "deps", `${library.name}-${commit}`);
-  try {
-    libs[library.name] = ensureCheckout({ dir, commit, library, log: (line) => console.log(line) });
-  } catch (e) {
-    const why = e.cause?.stderr?.toString().trim() || e.cause?.message || e.message;
-    fail(`${library.name} @ ${commit} could not be checked out into ${path.relative(ROOT, dir)} - git and network access are needed once (${why})`);
-  }
-}
-
-// 3. the config - the package's own, plus the unit tests - and one transpile
-// of the framework and this repository
 const output = path.join(WORK, "output");
-const configFile = path.join(WORK, "abap_transpile.json");
 console.log(`\n== transpile: ${CONFIG.abap}/ with ${CONFIG.runtime}/downport`);
 try {
-  const config = transpileConfig({
-    cwd: ROOT,
-    abap: path.join(ROOT, CONFIG.abap),
-    output,
-    core: libs["open-abap-core"],
-    shim: libs["express-icf-shim"],
-  });
-  config.write_unit_tests = true;
-  fs.writeFileSync(configFile, JSON.stringify(config, null, 2) + "\n");
-  transpile({ cwd: ROOT, config: path.relative(ROOT, configFile), log: (line) => console.log(line) });
+  transpile({ cwd: ROOT, abap: CONFIG.abap, output, unitTests: true, log: (line) => console.log(line) });
 } catch (e) {
   fail(`the transpile failed - ${e.message}`);
 }
 
-// 4. the generated tests of this repository's classes
-const index = fs.readFileSync(path.join(output, "index.mjs"), "utf8");
+// 2. the generated tests of this repository's classes
+const indexFile = path.join(output, "index.mjs");
+if (!fs.existsSync(indexFile)) fail(`the transpile wrote no ${path.relative(ROOT, indexFile)} - ${CONFIG.runtime} ${manifest.version} does not know unitTests, 1.149.0 is the first that does`);
+const index = fs.readFileSync(indexFile, "utf8");
 const cut = index.indexOf("async function run");
-if (cut < 0) fail(`${path.relative(ROOT, output)}/index.mjs has no 'async function run' - the transpiler's runner changed`);
+if (cut < 0) fail(`${path.relative(ROOT, indexFile)} has no 'async function run' - the transpiler's runner changed`);
 
 const runner = `
 const PREFIX = ${JSON.stringify(CONFIG.prefix)};

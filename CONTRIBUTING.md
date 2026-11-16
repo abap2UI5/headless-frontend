@@ -77,11 +77,14 @@ runs the same script. abap2UI5 is not downported and transpiled here: it comes
 as the npm package [`@abap2ui5/node-runtime`](https://www.npmjs.com/package/@abap2ui5/node-runtime)
 - the framework's ABAP of one release (`downport/`) and the tool that
 transpiles a repository's own classes with it (`setup/transpile.mjs`, the
-package's "Your own apps"). The script checks out open-abap-core and
-express-icf-shim at the commits the package records into `.unit/deps`
-(git-ignored; once), transpiles `src/` and the package's `downport/` in one run
-into `.unit/output` with the transpiler the package names, then runs the
-generated tests of `Z2UI5_CL_FRONTEND*` - each one printed, exit code 1 on any
+package's "Your own unit tests"). The script calls that tool's `transpile( )`
+with `unitTests: true` - what `npx abap2ui5-transpile src .unit/output
+--unit-tests` does: open-abap-core and express-icf-shim at the commits the
+package records (fetched once into `node_modules/.cache/abap2ui5-node-runtime`),
+`src/` and the package's `downport/` in one run into `.unit/output` with the
+transpiler the package names, and the transpiler's ABAP Unit runner. It then
+runs the generated tests of `Z2UI5_CL_FRONTEND*` with a runner of its own
+(every test reported, `UNIT_FILTER`) - each one printed, exit code 1 on any
 failure or when none ran. About half a minute.
 
 The framework under test is the release `package.json` pins, not abap2UI5's

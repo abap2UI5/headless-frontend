@@ -30,12 +30,15 @@ jobs:
       with:
         node-version: '22'
         cache: 'npm'
+    - run: npm ci
     # open-abap-core and express-icf-shim at the commits the package records
-    # (the script fetches them, a folder per commit) - the lockfile decides
-    # the package, so it is the key
+    # (its transpile fetches them, a folder per commit) - the lockfile decides
+    # the package, so it is the key. After `npm ci`, which empties
+    # node_modules
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: .unit/deps
+        path: |
+          node_modules/.cache/abap2ui5-node-runtime/open-abap-core
+          node_modules/.cache/abap2ui5-node-runtime/express-icf-shim
         key: unit-deps-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-    - run: npm ci
     - run: npm run unit
