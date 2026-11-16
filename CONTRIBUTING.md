@@ -21,7 +21,7 @@ request, and all four must be green:
 | `ABAP_STANDARD` | `abaplint.jsonc` | v750 syntax plus the full style ruleset |
 | `ABAP_CLOUD` | `.github/abaplint/abap_cloud.jsonc` | ABAP Cloud language version |
 | `ABAP_702` | `.github/abaplint/abap_702.jsonc` | downports the source, then lints it as v702 |
-| `ABAP_UNIT` | `.github/scripts/unit.mjs` | the ABAP Unit tests on abap2UI5 `main`, transpiled (`npm run unit`) |
+| `ABAP_UNIT` | `.github/scripts/unit.mjs` | the ABAP Unit tests on the transpiled abap2UI5 of `@abap2ui5/node-runtime` (`npm run unit`) |
 
 `ABAP_702` runs `npm run downport` first, which rewrites the sources in place.
 That transformation belongs to CI only — **never commit downported source**. The
@@ -73,13 +73,21 @@ UNIT_FILTER=ltcl_frontend_simulator_db npm run unit   # only those whose "OBJECT
 ```
 
 `.github/scripts/unit.mjs` is the whole recipe, and the `ABAP_UNIT` workflow
-runs the same script (with the checkout made by `actions/checkout`): a checkout of abap2UI5 `main` in `.unit/abap2UI5`
-(git-ignored; cloned on the first run, refreshed on every later one), `npm ci`
-there, this repository's `src/` copied in as the package `src/zz_headless_frontend`,
-`npm run downport && npm run auto_transpile`, then the generated tests of
-`Z2UI5_CL_FRONTEND_SIM*` - each one printed, exit code 1 on any failure or when
-none ran. The first run takes a few minutes (install, downport, transpile of
-the whole framework).
+runs the same script. abap2UI5 is not downported and transpiled here: it comes
+as the npm package [`@abap2ui5/node-runtime`](https://www.npmjs.com/package/@abap2ui5/node-runtime)
+- the framework's ABAP of one release (`downport/`) and the tool that
+transpiles a repository's own classes with it (`setup/transpile.mjs`, the
+package's "Your own apps"). The script checks out open-abap-core and
+express-icf-shim at the commits the package records into `.unit/deps`
+(git-ignored; once), transpiles `src/` and the package's `downport/` in one run
+into `.unit/output` with the transpiler the package names, then runs the
+generated tests of `Z2UI5_CL_FRONTEND*` - each one printed, exit code 1 on any
+failure or when none ran. About half a minute.
+
+The framework under test is the release `package.json` pins, not abap2UI5's
+`main`. `@abaplint/transpiler-cli` is pinned to the version that package was
+built with (`abap2ui5.transpiler` in its `package.json`) - the transpile
+refuses another one, so move the two together.
 
 Never commit `.unit/`. A green transpiled run is not a substitute for running
 the tests on a system (see abap2UI5's `abap-check` skill for what the
