@@ -26,7 +26,7 @@ CLASS z2ui5_cl_frontend_form DEFINITION PUBLIC.
         item TYPE string,
         qty  TYPE i,
       END OF ty_s_pos.
-    TYPES ty_t_pos TYPE STANDARD TABLE OF ty_s_pos WITH EMPTY KEY.
+    TYPES ty_t_pos TYPE STANDARD TABLE OF ty_s_pos WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_addr,
@@ -48,7 +48,7 @@ CLASS z2ui5_cl_frontend_form DEFINITION PUBLIC.
         qty   TYPE i,
         t_sub TYPE ty_t_pos,
       END OF ty_s_row.
-    TYPES ty_t_row TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    TYPES ty_t_row TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
 
     DATA mv_active TYPE abap_bool.
     DATA mt_key    TYPE string_table.
@@ -69,29 +69,76 @@ ENDCLASS.
 CLASS z2ui5_cl_frontend_form IMPLEMENTATION.
 
   METHOD z2ui5_if_app~main.
+      DATA temp3 TYPE z2ui5_cl_frontend_form=>ty_t_pos.
+      DATA temp4 LIKE LINE OF temp3.
+      DATA temp1 TYPE z2ui5_cl_frontend_form=>ty_t_row.
+      DATA temp2 LIKE LINE OF temp1.
+      DATA temp5 TYPE z2ui5_cl_frontend_form=>ty_t_pos.
+      DATA temp6 LIKE LINE OF temp5.
+      DATA temp7 TYPE z2ui5_cl_frontend_form=>ty_t_pos.
+      DATA temp8 LIKE LINE OF temp7.
+      DATA temp9 TYPE z2ui5_cl_frontend_form=>ty_t_pos.
+      DATA temp10 LIKE LINE OF temp9.
 
     me->client = client.
 
-    IF client->check_on_init( ).
-      ms_order = VALUE #( name   = `Order`
-                          s_addr = VALUE #( city = `Paris` )
-                          t_pos  = VALUE #( ( item = `Pen` qty = 1 )
-                                            ( item = `Ink` qty = 2 ) ) ).
-      mt_row = VALUE #( ( name  = `Anna`
-                          qty   = 1
-                          t_sub = VALUE #( ( item = `a1` qty = 10 ) ) )
-                        ( name  = `Ben`
-                          qty   = 2
-                          t_sub = VALUE #( ( item = `b1` qty = 20 ) ) )
-                        ( name  = `Carl`
-                          qty   = 3
-                          t_sub = VALUE #( ( item = `c1` qty = 30 )
-                                           ( item = `c2` qty = 31 ) ) ) ).
+    IF client->check_on_init( ) IS NOT INITIAL.
+      CLEAR ms_order.
+      ms_order-name = `Order`.
+      CLEAR ms_order-s_addr.
+      ms_order-s_addr-city = `Paris`.
+
+      CLEAR temp3.
+
+      temp4-item = `Pen`.
+      temp4-qty = 1.
+      INSERT temp4 INTO TABLE temp3.
+      temp4-item = `Ink`.
+      temp4-qty = 2.
+      INSERT temp4 INTO TABLE temp3.
+      ms_order-t_pos = temp3.
+
+      CLEAR temp1.
+
+      temp2-name = `Anna`.
+      temp2-qty = 1.
+
+      CLEAR temp5.
+
+      temp6-item = `a1`.
+      temp6-qty = 10.
+      INSERT temp6 INTO TABLE temp5.
+      temp2-t_sub = temp5.
+      INSERT temp2 INTO TABLE temp1.
+      temp2-name = `Ben`.
+      temp2-qty = 2.
+
+      CLEAR temp7.
+
+      temp8-item = `b1`.
+      temp8-qty = 20.
+      INSERT temp8 INTO TABLE temp7.
+      temp2-t_sub = temp7.
+      INSERT temp2 INTO TABLE temp1.
+      temp2-name = `Carl`.
+      temp2-qty = 3.
+
+      CLEAR temp9.
+
+      temp10-item = `c1`.
+      temp10-qty = 30.
+      INSERT temp10 INTO TABLE temp9.
+      temp10-item = `c2`.
+      temp10-qty = 31.
+      INSERT temp10 INTO TABLE temp9.
+      temp2-t_sub = temp9.
+      INSERT temp2 INTO TABLE temp1.
+      mt_row = temp1.
     ENDIF.
 
     on_event( ).
 
-    IF client->check_on_navigated( ).
+    IF client->check_on_navigated( ) IS NOT INITIAL.
       view_display( ).
     ENDIF.
 
@@ -103,26 +150,50 @@ CLASS z2ui5_cl_frontend_form IMPLEMENTATION.
     DATA lv_qty TYPE i.
     DATA lv_sub TYPE i.
     DATA lt_name TYPE string_table.
+        DATA temp3 TYPE string.
+        DATA temp4 TYPE string.
+        DATA ls_pos LIKE LINE OF ms_order-t_pos.
+        DATA temp5 TYPE string.
+        DATA ls_row LIKE LINE OF mt_row.
+        DATA temp6 TYPE string.
 
     CASE client->get_event( ).
 
       WHEN `CHECK`.
-        mv_result = |active { COND #( WHEN mv_active = abap_true THEN `yes` ELSE `no` ) }|.
+
+        IF mv_active = abap_true.
+          temp3 = `yes`.
+        ELSE.
+          temp3 = `no`.
+        ENDIF.
+        mv_result = |active { temp3 }|.
 
       WHEN `KEYS`.
-        mv_result = |keys { COND #( WHEN mt_key IS INITIAL THEN `none`
-                                    ELSE concat_lines_of( table = mt_key
-                                                          sep   = `,` ) ) }|.
+
+        IF mt_key IS INITIAL.
+          temp4 = `none`.
+        ELSE.
+          temp4 = concat_lines_of( table = mt_key sep = `,` ).
+        ENDIF.
+        mv_result = |keys { temp4 }|.
 
       WHEN `ORDER`.
-        LOOP AT ms_order-t_pos INTO DATA(ls_pos).
+
+        LOOP AT ms_order-t_pos INTO ls_pos.
           lv_qty = lv_qty + ls_pos-qty.
         ENDLOOP.
-        mv_result = |{ ms_order-name } { COND #( WHEN ms_order-urgent = abap_true THEN `urgent` ELSE `normal` ) } | &&
+
+        IF ms_order-urgent = abap_true.
+          temp5 = `urgent`.
+        ELSE.
+          temp5 = `normal`.
+        ENDIF.
+        mv_result = |{ ms_order-name } { temp5 } | &&
                     |{ ms_order-s_addr-city } positions { lines( ms_order-t_pos ) } qty { lv_qty }|.
 
       WHEN `ROWS`.
-        LOOP AT mt_row INTO DATA(ls_row).
+
+        LOOP AT mt_row INTO ls_row.
           IF ls_row-selkz = abap_true.
             INSERT ls_row-name INTO TABLE lt_name.
             lv_qty = lv_qty + ls_row-qty.
@@ -131,9 +202,13 @@ CLASS z2ui5_cl_frontend_form IMPLEMENTATION.
             lv_sub = lv_sub + ls_pos-qty.
           ENDLOOP.
         ENDLOOP.
-        mv_result = |selected { COND #( WHEN lt_name IS INITIAL THEN `none`
-                                        ELSE concat_lines_of( table = lt_name
-                                                              sep   = `,` ) ) } qty { lv_qty } sub { lv_sub }|.
+
+        IF lt_name IS INITIAL.
+          temp6 = `none`.
+        ELSE.
+          temp6 = concat_lines_of( table = lt_name sep = `,` ).
+        ENDIF.
+        mv_result = |selected { temp6 } qty { lv_qty } sub { lv_sub }|.
 
       WHEN OTHERS.
         RETURN.
@@ -147,7 +222,8 @@ CLASS z2ui5_cl_frontend_form IMPLEMENTATION.
 
   METHOD view_display.
 
-    DATA(view) = z2ui5_cl_ui5_view_builder=>factory( ).
+    DATA view TYPE REF TO z2ui5_cl_ui5_view_builder.
+    view = z2ui5_cl_ui5_view_builder=>factory( ).
 
     view->ele( n = `View` ns = `mvc`
         )->a( n = `xmlns`      v = `sap.m`

@@ -57,7 +57,7 @@ CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
         title     TYPE string,
         details   TYPE string,
       END OF ty_s_message.
-    TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH EMPTY KEY.
+    TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH DEFAULT KEY.
 
     TYPES:
       "! One open view layer. layer is a z2ui5_if_client=&gt;cs_view value
@@ -74,7 +74,7 @@ CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
         anchor_id TYPE string,
         roundtrip TYPE i,
       END OF ty_s_layer.
-    TYPES ty_t_layer TYPE STANDARD TABLE OF ty_s_layer WITH EMPTY KEY.
+    TYPES ty_t_layer TYPE STANDARD TABLE OF ty_s_layer WITH DEFAULT KEY.
 
     TYPES:
       "! One follow-up action of the last response - what the app queued with
@@ -87,7 +87,7 @@ CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
         t_arg TYPE string_table,
         json  TYPE string,
       END OF ty_s_action.
-    TYPES ty_t_action TYPE STANDARD TABLE OF ty_s_action WITH EMPTY KEY.
+    TYPES ty_t_action TYPE STANDARD TABLE OF ty_s_action WITH DEFAULT KEY.
 
     TYPES:
       "! The browser-history intent - read-only, nothing is navigated. All
@@ -496,7 +496,7 @@ CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
         path  TYPE string,
         val   TYPE REF TO z2ui5_if_ajson,
       END OF ty_s_edit.
-    TYPES ty_t_edit TYPE STANDARD TABLE OF ty_s_edit WITH EMPTY KEY.
+    TYPES ty_t_edit TYPE STANDARD TABLE OF ty_s_edit WITH DEFAULT KEY.
 
     TYPES:
       "! One row step of a table edit path (Lib.js parseDeltaSteps): the row,
@@ -506,7 +506,7 @@ CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
         field TYPE string,
         leaf  TYPE abap_bool,
       END OF ty_s_step.
-    TYPES ty_t_step TYPE STANDARD TABLE OF ty_s_step WITH EMPTY KEY.
+    TYPES ty_t_step TYPE STANDARD TABLE OF ty_s_step WITH DEFAULT KEY.
 
     DATA mo_handler      TYPE REF TO z2ui5_cl_ui5_handler.
     DATA mt_edit         TYPE ty_t_edit.
@@ -707,7 +707,7 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD start.
 
-    result = NEW #( ).
+    CREATE OBJECT result.
     result->roundtrip( search = |?app_start={ app }| ).
 
   ENDMETHOD.
@@ -729,7 +729,7 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
                 |or the app runs sticky (a stateful session keeps no draft and cannot be resumed across requests)|.
     ENDIF.
 
-    result = NEW #( ).
+    CREATE OBJECT result.
     result->mv_id = lv_id.
 
     IF state IS NOT INITIAL.
@@ -756,9 +756,17 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   METHOD restore_state.
 
     DATA ls_state TYPE ty_s_state.
+        DATA temp42 TYPE string.
+        DATA temp1 TYPE REF TO z2ui5_cl_ajson.
+        DATA lx TYPE REF TO cx_root.
     TRY.
-        z2ui5_cl_ajson=>parse( CONV string( state ) )->to_abap( IMPORTING ev_container = ls_state ).
-      CATCH cx_root INTO DATA(lx).
+
+        temp42 = state.
+
+        temp1 = z2ui5_cl_ajson=>parse( temp42 ).
+        temp1->to_abap( IMPORTING ev_container = ls_state ).
+
+      CATCH cx_root INTO lx.
         RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
           EXPORTING
             val      = `RESUME_STATE_INVALID - the state is not what get_state( ) returns`
@@ -778,11 +786,13 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD restore_draft.
+        DATA lo_app TYPE REF TO z2ui5_cl_ui5_app_cont.
 
     " the app class and the model as the client was left holding it - the
     " draft carries both; the view XML it does not
     TRY.
-        DATA(lo_app) = z2ui5_cl_ui5_app_cont=>db_load( mv_id ).
+
+        lo_app = z2ui5_cl_ui5_app_cont=>db_load( mv_id ).
         mv_app = z2ui5_cl_ui5_util_context=>rtti_get_classname_by_ref( lo_app->mo_app ).
         mv_model_last = lo_app->model_json_stringify( ).
       CATCH cx_root ##NO_HANDLER.
@@ -805,7 +815,8 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
     DATA lv_json TYPE string.
 
-    DATA(lo_val) = json_parse_value( json ).
+    DATA lo_val TYPE REF TO z2ui5_if_ajson.
+    lo_val = json_parse_value( json ).
     IF lo_val IS NOT BOUND.
       lv_json = json.
       RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
@@ -821,8 +832,14 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD set_bool.
 
+    DATA temp43 TYPE string.
+    IF value = abap_true.
+      temp43 = `true`.
+    ELSE.
+      temp43 = `false`.
+    ENDIF.
     result = set_json( path  = name
-                       json  = COND string( WHEN value = abap_true THEN `true` ELSE `false` )
+                       json  = temp43
                        layer = layer ).
 
   ENDMETHOD.
@@ -841,9 +858,16 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   METHOD set_row.
 
     DATA lv_json TYPE string.
+    DATA lo_row TYPE REF TO z2ui5_if_ajson.
+    DATA lt_column TYPE string_table.
+    DATA temp44 TYPE string_table.
+    DATA lt_path LIKE temp44.
+    DATA lv_column LIKE LINE OF lt_column.
+      DATA lv_path TYPE string.
     lv_json = json.
 
-    DATA(lo_row) = json_parse_value( json ).
+
+    lo_row = json_parse_value( json ).
     IF lo_row IS NOT BOUND OR lo_row->get_node_type( `/` ) <> z2ui5_if_ajson_types=>node_type-object.
       RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
         EXPORTING val = |SET_ROW_NO_OBJECT - the row { row } of { table } takes a JSON object of column values, not: { lv_json }|.
@@ -851,15 +875,21 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
     " every column is one edit, the way a user types a row in cell by cell -
     " the paths are checked before the first edit is queued
-    DATA(lt_column) = lo_row->members( `/` ).
-    DATA(lt_path) = VALUE string_table( ).
-    LOOP AT lt_column INTO DATA(lv_column).
+
+    lt_column = lo_row->members( `/` ).
+
+    CLEAR temp44.
+
+    lt_path = temp44.
+
+    LOOP AT lt_column INTO lv_column.
       INSERT row_path( table  = table
                        row    = row
                        column = lv_column ) INTO TABLE lt_path.
     ENDLOOP.
     LOOP AT lt_column INTO lv_column.
-      READ TABLE lt_path INTO DATA(lv_path) INDEX sy-tabix.
+
+      READ TABLE lt_path INTO lv_path INDEX sy-tabix.
       edit_add( path  = lv_path
                 val   = lo_row->slice( |/{ lv_column }| )
                 layer = layer ).
@@ -870,17 +900,24 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD select_row.
 
+    DATA temp45 TYPE string.
+    IF selected = abap_true.
+      temp45 = `true`.
+    ELSE.
+      temp45 = `false`.
+    ENDIF.
     result = set_json( path  = row_path( table  = table
                                          row    = row
                                          column = column )
-                       json  = COND string( WHEN selected = abap_true THEN `true` ELSE `false` )
+                       json  = temp45
                        layer = layer ).
 
   ENDMETHOD.
 
   METHOD close_layer.
 
-    DATA(lv_layer) = layer_check( layer ).
+    DATA lv_layer TYPE string.
+    lv_layer = layer_check( layer ).
 
     " the frontend tears the slot down (actions/Slots, VIEW_SLOTS destroy)
     " and the model of a standalone layer dies with it - its unsent edits too
@@ -895,22 +932,32 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD click.
 
-    DATA(lv_model) = model_key( layer ).
+    DATA lv_model TYPE string.
+      DATA temp46 LIKE sy-subrc.
+        DATA temp47 TYPE string.
+    lv_model = model_key( layer ).
 
     IF mv_check_events = abap_true.
       " a dialog is modal: nothing behind it can be clicked
+
+      READ TABLE mt_layer WITH KEY layer = z2ui5_if_client=>cs_view-popup TRANSPORTING NO FIELDS.
+      temp46 = sy-subrc.
       IF lv_model = z2ui5_if_client=>cs_view-main
-          AND line_exists( mt_layer[ layer = z2ui5_if_client=>cs_view-popup ] ). "#EC CI_SORTSEQ
+          AND temp46 = 0. "#EC CI_SORTSEQ
         RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
           EXPORTING val = |EVENT_NOT_REACHABLE - event { event } of the main view cannot be clicked while a popup is open|.
       ENDIF.
       IF check_event_exists( event = event
                              layer = layer ) = abap_false.
+
+        IF layer IS NOT INITIAL.
+          temp47 = to_upper( layer ).
+        ELSE.
+          temp47 = layer_top( ).
+        ENDIF.
         RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
           EXPORTING
-            val = |EVENT_NOT_WIRED - event { event } is not wired in layer { COND string( WHEN layer IS NOT INITIAL
-                                                                                         THEN to_upper( layer )
-                                                                                         ELSE layer_top( ) ) }; | &&
+            val = |EVENT_NOT_WIRED - event { event } is not wired in layer { temp47 }; | &&
                   |wired: { concat_lines_of( table = get_events( layer )
                                              sep   = `, ` ) }|.
       ENDIF.
@@ -942,6 +989,7 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD model_key.
+      DATA temp48 LIKE sy-subrc.
 
     " the model a layer edits and sends: a popup and a popover own one, the
     " nested views share the MAIN model (View1 _pickModelForRoundtrip)
@@ -951,7 +999,10 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
       result = layer_check( layer ).
       " MAIN is always addressable - a resumed session without state has
       " the draft's model but no layer
-      IF result <> z2ui5_if_client=>cs_view-main AND NOT line_exists( mt_layer[ layer = result ] ). "#EC CI_SORTSEQ
+
+      READ TABLE mt_layer WITH KEY layer = result TRANSPORTING NO FIELDS.
+      temp48 = sy-subrc.
+      IF result <> z2ui5_if_client=>cs_view-main AND NOT temp48 = 0. "#EC CI_SORTSEQ
         RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
           EXPORTING val = |LAYER_NOT_OPEN - layer { result } is not open; open: { layer_top( ) }|.
       ENDIF.
@@ -967,33 +1018,50 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
     " the path as the frontend records it (/A/0/B), from the names an app
     " author wrote - upper case, empty segments dropped
-    SPLIT conv_name_to_path( path ) AT `/` INTO TABLE DATA(lt_seg).
+    TYPES temp1 TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+DATA lt_seg TYPE temp1.
+    DATA lv_path TYPE string.
+    DATA lv_model TYPE string.
+    DATA temp49 TYPE z2ui5_cl_frontend_sim=>ty_s_edit.
+    SPLIT conv_name_to_path( path ) AT `/` INTO TABLE lt_seg.
     DELETE lt_seg WHERE table_line IS INITIAL.
     IF lt_seg IS INITIAL.
       RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error
         EXPORTING val = `SET_PATH_EMPTY - a model path names at least the bound attribute`.
     ENDIF.
-    DATA(lv_path) = |/{ concat_lines_of( table = lt_seg
+
+    lv_path = |/{ concat_lines_of( table = lt_seg
                                          sep   = `/` ) }|.
 
-    DATA(lv_model) = model_key( layer ).
+
+    lv_model = model_key( layer ).
 
     " a later edit of the same path replaces the earlier one and is applied
     " after every edit before it - the order the browser's model saw them in
     DELETE mt_edit WHERE model = lv_model AND path = lv_path. "#EC CI_SORTSEQ
-    INSERT VALUE #( model = lv_model
-                    path  = lv_path
-                    val   = val ) INTO TABLE mt_edit.
+
+    CLEAR temp49.
+    temp49-model = lv_model.
+    temp49-path = lv_path.
+    temp49-val = val.
+    INSERT temp49 INTO TABLE mt_edit.
 
   ENDMETHOD.
 
   METHOD edits_prune.
 
     " the model of a closed popup or popover is gone, and its edits with it
-    IF NOT line_exists( mt_layer[ layer = z2ui5_if_client=>cs_view-popup ] ). "#EC CI_SORTSEQ
+    DATA temp50 LIKE sy-subrc.
+    DATA temp51 LIKE sy-subrc.
+    READ TABLE mt_layer WITH KEY layer = z2ui5_if_client=>cs_view-popup TRANSPORTING NO FIELDS.
+    temp50 = sy-subrc.
+    IF NOT temp50 = 0. "#EC CI_SORTSEQ
       DELETE mt_edit WHERE model = z2ui5_if_client=>cs_view-popup. "#EC CI_SORTSEQ
     ENDIF.
-    IF NOT line_exists( mt_layer[ layer = z2ui5_if_client=>cs_view-popover ] ). "#EC CI_SORTSEQ
+
+    READ TABLE mt_layer WITH KEY layer = z2ui5_if_client=>cs_view-popover TRANSPORTING NO FIELDS.
+    temp51 = sy-subrc.
+    IF NOT temp51 = 0. "#EC CI_SORTSEQ
       DELETE mt_edit WHERE model = z2ui5_if_client=>cs_view-popover. "#EC CI_SORTSEQ
     ENDIF.
 
@@ -1005,9 +1073,24 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     DATA lt_whole TYPE string_table.
     DATA lv_attr TYPE string.
     DATA lo_data TYPE REF TO z2ui5_if_ajson.
+    DATA ls_edit LIKE LINE OF mt_edit.
+    DATA lv_model TYPE string.
+        DATA lv_path LIKE LINE OF lt_path.
+          TYPES temp2 TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+DATA lt_seg TYPE temp2.
+          DATA lv_attr_path TYPE string.
+          DATA lt_step TYPE z2ui5_cl_frontend_sim=>ty_t_step.
+          DATA temp52 LIKE sy-subrc.
+          DATA lv_node LIKE lv_attr_path.
+          DATA lv_model_path LIKE lv_attr_path.
+          DATA ls_step LIKE LINE OF lt_step.
+            DATA lv_field TYPE string.
+            DATA temp53 LIKE sy-subrc.
+        DATA lx TYPE REF TO cx_root.
 
     CLEAR: delta, data.
-    LOOP AT mt_edit INTO DATA(ls_edit) WHERE model = model. "#EC CI_SORTSEQ
+
+    LOOP AT mt_edit INTO ls_edit WHERE model = model. "#EC CI_SORTSEQ
       INSERT ls_edit-path INTO TABLE lt_path.
     ENDLOOP.
     IF lt_path IS INITIAL.
@@ -1017,7 +1100,8 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     " the model the firing layer holds, with every edit applied - the
     " browser writes an edit into its model the moment it happens, and
     " builds the delta from that model (View1 eB, Lib.buildDeltaFromPaths)
-    DATA(lv_model) = model_of_layer( model ).
+
+    lv_model = model_of_layer( model ).
     IF lv_model IS INITIAL AND model = z2ui5_if_client=>cs_view-main.
       lv_model = mv_model_last.
     ENDIF.
@@ -1037,14 +1121,19 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
         data = lo_data->stringify( ).
 
         delta = z2ui5_cl_ajson=>create_empty( ).
-        LOOP AT lt_path INTO DATA(lv_path).
-          SPLIT lv_path AT `/` INTO TABLE DATA(lt_seg).
+
+        LOOP AT lt_path INTO lv_path.
+
+
+          SPLIT lv_path AT `/` INTO TABLE lt_seg.
           DELETE lt_seg WHERE table_line IS INITIAL.
           READ TABLE lt_seg INTO lv_attr INDEX 1.
           DELETE lt_seg INDEX 1.
-          DATA(lv_attr_path) = |/{ lv_attr }|.
 
-          DATA(lt_step) = delta_steps( lt_seg ).
+          lv_attr_path = |/{ lv_attr }|.
+
+
+          lt_step = delta_steps( lt_seg ).
           IF lt_step IS INITIAL.
             " a scalar, a structure, an array, a table inside a structure:
             " the whole attribute - a superset of every delta of it
@@ -1055,16 +1144,23 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
             INSERT lv_attr_path INTO TABLE lt_whole.
             CONTINUE.
           ENDIF.
-          IF line_exists( lt_whole[ table_line = lv_attr_path ] ). "#EC CI_SORTSEQ
+
+          READ TABLE lt_whole WITH KEY table_line = lv_attr_path TRANSPORTING NO FIELDS.
+          temp52 = sy-subrc.
+          IF temp52 = 0. "#EC CI_SORTSEQ
             CONTINUE.
           ENDIF.
 
           " a table cell: { TAB: { __delta: { row: { COL: value } } } },
           " one level deeper per nested table
-          DATA(lv_node) = lv_attr_path.
-          DATA(lv_model_path) = lv_attr_path.
-          LOOP AT lt_step INTO DATA(ls_step).
-            DATA(lv_field) = |{ lv_node }/__delta/{ ls_step-row }/{ ls_step-field }|.
+
+          lv_node = lv_attr_path.
+
+          lv_model_path = lv_attr_path.
+
+          LOOP AT lt_step INTO ls_step.
+
+            lv_field = |{ lv_node }/__delta/{ ls_step-row }/{ ls_step-field }|.
             lv_model_path = |{ lv_model_path }/{ ls_step-row }/{ ls_step-field }|.
             IF ls_step-leaf = abap_true.
               " the leaf replaces a nested delta queued for the same field
@@ -1077,14 +1173,18 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
               EXIT.
             ENDIF.
             " a whole sub-table queued by another path covers this edit
-            IF line_exists( lt_whole[ table_line = lv_field ] ). "#EC CI_SORTSEQ
+
+            READ TABLE lt_whole WITH KEY table_line = lv_field TRANSPORTING NO FIELDS.
+            temp53 = sy-subrc.
+            IF temp53 = 0. "#EC CI_SORTSEQ
               EXIT.
             ENDIF.
             lv_node = lv_field.
           ENDLOOP.
         ENDLOOP.
 
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
     ENDTRY.
 
@@ -1094,7 +1194,8 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
     " a value the model does not hold is undefined in the browser - the key
     " is left out of the delta
-    DATA(lo_val) = from->slice( from_path ).
+    DATA lo_val TYPE REF TO z2ui5_if_ajson.
+    lo_val = from->slice( from_path ).
     IF lo_val IS BOUND.
       to->set( iv_path         = to_path
                iv_val          = lo_val
@@ -1116,7 +1217,10 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     DATA lv_index TYPE i VALUE 1.
     DATA lv_index_field TYPE i.
 
-    DATA(lv_count) = lines( t_seg ).
+    DATA lv_count TYPE i.
+        DATA temp54 TYPE z2ui5_cl_frontend_sim=>ty_s_step.
+      DATA temp55 TYPE z2ui5_cl_frontend_sim=>ty_s_step.
+    lv_count = lines( t_seg ).
     WHILE lv_index <= lv_count.
       CLEAR: lv_row, lv_field, lv_next.
       READ TABLE t_seg INTO lv_row INDEX lv_index.
@@ -1129,13 +1233,19 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
       lv_index = lv_index + 2.
       READ TABLE t_seg INTO lv_next INDEX lv_index.
       IF sy-subrc <> 0 OR lv_next CN `0123456789`.
-        INSERT VALUE #( row   = lv_row
-                        field = lv_field
-                        leaf  = abap_true ) INTO TABLE result.
+
+        CLEAR temp54.
+        temp54-row = lv_row.
+        temp54-field = lv_field.
+        temp54-leaf = abap_true.
+        INSERT temp54 INTO TABLE result.
         RETURN.
       ENDIF.
-      INSERT VALUE #( row   = lv_row
-                      field = lv_field ) INTO TABLE result.
+
+      CLEAR temp55.
+      temp55-row = lv_row.
+      temp55-field = lv_field.
+      INSERT temp55 INTO TABLE result.
     ENDWHILE.
     CLEAR result.
 
@@ -1146,10 +1256,23 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     " a model path counts array indices from 0, an ajson path from 1
     DATA lv_index TYPE i.
 
-    SPLIT path AT `/` INTO TABLE DATA(lt_seg).
+    TYPES temp3 TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+DATA lt_seg TYPE temp3.
+    DATA lv_seg LIKE LINE OF lt_seg.
+      DATA temp56 TYPE string.
+      DATA lv_parent LIKE temp56.
+    SPLIT path AT `/` INTO TABLE lt_seg.
     DELETE lt_seg WHERE table_line IS INITIAL.
-    LOOP AT lt_seg INTO DATA(lv_seg).
-      DATA(lv_parent) = COND string( WHEN result IS INITIAL THEN `/` ELSE result ).
+
+    LOOP AT lt_seg INTO lv_seg.
+
+      IF result IS INITIAL.
+        temp56 = `/`.
+      ELSE.
+        temp56 = result.
+      ENDIF.
+
+      lv_parent = temp56.
       IF lv_seg CO `0123456789` AND json->get_node_type( lv_parent ) = z2ui5_if_ajson_types=>node_type-array.
         lv_index = lv_seg.
         lv_index = lv_index + 1.
@@ -1168,9 +1291,11 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     " any JSON value, a scalar included - wrapped, so the parser always
     " reads an object; unbound when it is none
     DATA lv_json TYPE string.
+        DATA lo_wrap TYPE REF TO z2ui5_cl_ajson.
     lv_json = json.
     TRY.
-        DATA(lo_wrap) = z2ui5_cl_ajson=>parse( |\{"v":{ lv_json }\}| ).
+
+        lo_wrap = z2ui5_cl_ajson=>parse( |\{"v":{ lv_json }\}| ).
         IF lines( lo_wrap->members( `/` ) ) = 1.
           result = lo_wrap->slice( `/v` ).
         ENDIF.
@@ -1183,13 +1308,15 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   METHOD json_of_string.
 
     DATA lv_value TYPE string.
+        DATA lx TYPE REF TO cx_root.
     lv_value = value.
     TRY.
         result = z2ui5_cl_ajson=>create_empty( ).
         result->set( iv_path         = `/`
                      iv_val          = lv_value
                      iv_ignore_empty = abap_false ).
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
     ENDTRY.
 
@@ -1218,10 +1345,18 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD roundtrip.
 
+    DATA lo_delta TYPE REF TO z2ui5_if_ajson.
+    DATA lv_data TYPE string.
+    DATA lv_request TYPE string.
+    DATA lo_action_before LIKE mo_handler->mo_action.
+        DATA ls_response TYPE z2ui5_if_ui5_types=>ty_s_http_res.
+        DATA lx TYPE REF TO cx_root.
+      DATA lr_layer TYPE REF TO z2ui5_cl_frontend_sim=>ty_s_layer.
     delta_build( EXPORTING model = model
-                 IMPORTING delta = DATA(lo_delta)
-                           data  = DATA(lv_data) ).
-    DATA(lv_request) = build_request( event  = event
+                 IMPORTING delta = lo_delta
+                           data  = lv_data ).
+
+    lv_request = build_request( event  = event
                                       search = search
                                       hash   = hash
                                       t_arg  = t_arg
@@ -1235,17 +1370,20 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
       mo_handler->mv_request_json = lv_request.
       mo_handler->mv_session_sticky = abap_true.
     ELSE.
-      mo_handler = NEW z2ui5_cl_ui5_handler( lv_request ).
+      CREATE OBJECT mo_handler TYPE z2ui5_cl_ui5_handler EXPORTING VAL = lv_request.
       mo_handler->mv_session_sticky = abap_false.
     ENDIF.
 
     " like _http_post: a held handler answers the next request from the
     " action it holds, so a failed roundtrip must leave the one it started
     " with - not a half-navigated one - and none of its queues
-    DATA(lo_action_before) = mo_handler->mo_action.
+
+    lo_action_before = mo_handler->mo_action.
     TRY.
-        DATA(ls_response) = mo_handler->main( ).
-      CATCH cx_root INTO DATA(lx).
+
+        ls_response = mo_handler->main( ).
+
+      CATCH cx_root INTO lx.
         IF mo_handler->mv_session_sticky = abap_true.
           mo_handler->mo_action = lo_action_before.
           CLEAR mo_handler->mo_action->ms_next.
@@ -1269,7 +1407,8 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     " as in the browser - a response that carries no model (the backend's
     " is unchanged against what the client holds) leaves them there
     IF lv_data IS NOT INITIAL.
-      READ TABLE mt_layer REFERENCE INTO DATA(lr_layer) WITH KEY layer = model. "#EC CI_SORTSEQ
+
+      READ TABLE mt_layer REFERENCE INTO lr_layer WITH KEY layer = model. "#EC CI_SORTSEQ
       IF sy-subrc = 0.
         lr_layer->model = lv_data.
       ELSEIF model = z2ui5_if_client=>cs_view-main.
@@ -1287,9 +1426,15 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD build_request.
+        DATA temp57 TYPE REF TO z2ui5_if_ajson.
+        DATA lo_req LIKE temp57.
+        DATA lx TYPE REF TO cx_root.
 
     TRY.
-        DATA(lo_req) = CAST z2ui5_if_ajson( z2ui5_cl_ajson=>create_empty( ) ).
+
+        temp57 ?= z2ui5_cl_ajson=>create_empty( ).
+
+        lo_req = temp57.
 
         IF mv_id IS NOT INITIAL.
           lo_req->set( iv_path = `/value/S_FRONT/ID`
@@ -1328,7 +1473,8 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
         result = lo_req->stringify( ).
 
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
     ENDTRY.
 
@@ -1337,10 +1483,19 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   METHOD parse_response.
 
     DATA lo_resp TYPE REF TO z2ui5_if_ajson.
+        DATA lx TYPE REF TO cx_root.
+    DATA lv_app TYPE string.
+    DATA lv_model_present TYPE abap_bool.
+    DATA lv_model TYPE string.
+    DATA lv_index TYPE i.
+      DATA lv_path TYPE string.
+      DATA temp58 LIKE LINE OF mt_layer.
+      DATA lr_layer LIKE REF TO temp58.
 
     TRY.
         lo_resp = z2ui5_cl_ajson=>parse( json ).
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
     ENDTRY.
 
@@ -1357,14 +1512,16 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     mv_resp_json = json.
     mv_roundtrip = mv_roundtrip + 1.
     CLEAR mt_action.
-    ms_nav = VALUE #( routing = ms_nav-routing ).
+    CLEAR ms_nav.
+    ms_nav-routing = ms_nav-routing.
 
     mv_id = lo_resp->get_string( `/S_FRONT/ID` ).
 
     " An APP SWITCH kills the two standalone layers - they live outside the
     " MAIN control tree, and the switch is visible here because the response
     " names its app (View1 _processAfterRendering, before the system actions)
-    DATA(lv_app) = lo_resp->get_string( `/S_FRONT/APP` ).
+
+    lv_app = lo_resp->get_string( `/S_FRONT/APP` ).
     IF lv_app IS NOT INITIAL AND mv_app IS NOT INITIAL AND lv_app <> mv_app.
       layer_destroy( z2ui5_if_client=>cs_view-popup ).
       layer_destroy( z2ui5_if_client=>cs_view-popover ).
@@ -1375,8 +1532,10 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
     " An unchanged model is not sent at all; a display builds its layer with
     " the response's model, an empty one when the key is missing
-    DATA(lv_model_present) = lo_resp->exists( `/MODEL` ).
-    DATA(lv_model) = `{}`.
+
+    lv_model_present = lo_resp->exists( `/MODEL` ).
+
+    lv_model = `{}`.
     IF lv_model_present = abap_true.
       TRY.
           lv_model = lo_resp->slice( `/MODEL` )->stringify( ).
@@ -1387,9 +1546,11 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     ENDIF.
 
     " Phase 1: the SYSTEM actions - view lifecycle and history - in order
-    DATA(lv_index) = 1.
+
+    lv_index = 1.
     DO.
-      DATA(lv_path) = |/S_FRONT/S_ACTION/T_SYSTEM/{ lv_index }|.
+
+      lv_path = |/S_FRONT/S_ACTION/T_SYSTEM/{ lv_index }|.
       IF lo_resp->exists( lv_path ) = abap_false.
         EXIT.
       ENDIF.
@@ -1404,7 +1565,9 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     " a popup of a called app does not receive the caller's model, nor the
     " other way round. A layer built in this response already holds it
     IF lv_model_present = abap_true.
-      LOOP AT mt_layer REFERENCE INTO DATA(lr_layer)
+
+
+      LOOP AT mt_layer REFERENCE INTO lr_layer
            WHERE layer = z2ui5_if_client=>cs_view-main
               OR layer = z2ui5_if_client=>cs_view-popup
               OR layer = z2ui5_if_client=>cs_view-popover.  "#EC CI_SORTSEQ
@@ -1429,14 +1592,21 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD parse_system_action.
+        DATA lv_method TYPE string.
+        DATA lv_layer TYPE string.
+        DATA lv_opt TYPE string.
+        DATA lv_anchor TYPE string.
+          DATA temp1 TYPE xsdboolean.
 
     " [ VIEW_SLOTS, display, slot, xml, opt? ], [ VIEW_SLOTS, destroy, slot ]
     " and [ ROUTER, sync, opt ] - see z2ui5_cl_ui5_frontend
     CASE resp->get_string( |{ path }/1| ).
 
       WHEN z2ui5_if_ui5_types=>cs_slot_action-target.
-        DATA(lv_method) = resp->get_string( |{ path }/2| ).
-        DATA(lv_layer)  = resp->get_string( |{ path }/3| ).
+
+        lv_method = resp->get_string( |{ path }/2| ).
+
+        lv_layer  = resp->get_string( |{ path }/3| ).
 
         IF lv_method = z2ui5_if_ui5_types=>cs_slot_action-destroy.
           layer_destroy( lv_layer ).
@@ -1447,15 +1617,18 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
           RETURN.
         ENDIF.
 
-        DATA(lv_opt) = |{ path }/5|.
-        DATA(lv_anchor) = resp->get_string( |{ lv_opt }/openById| ).
+
+        lv_opt = |{ path }/5|.
+
+        lv_anchor = resp->get_string( |{ lv_opt }/openById| ).
         IF lv_anchor IS INITIAL.
           lv_anchor = resp->get_string( |{ lv_opt }/id| ).
         ENDIF.
 
         IF lv_layer = z2ui5_if_client=>cs_view-main.
-          ms_nav-nav_back   = xsdbool( resp->get_boolean( |{ lv_opt }/navBack| ) = abap_true
-                                    OR resp->get_boolean( |{ lv_opt }/transitionBack| ) = abap_true ).
+
+          temp1 = boolc( resp->get_boolean( |{ lv_opt }/navBack| ) = abap_true OR resp->get_boolean( |{ lv_opt }/transitionBack| ) = abap_true ).
+          ms_nav-nav_back   = temp1.
           ms_nav-transition = resp->get_string( |{ lv_opt }/transition| ).
         ENDIF.
 
@@ -1492,14 +1665,36 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD parse_custom_action.
 
-    DATA(ls_action) = VALUE ty_s_action( t_arg = json_args( resp = resp
-                                                            path = path ) ).
+    DATA temp59 TYPE ty_s_action.
+    DATA ls_action LIKE temp59.
+      FIELD-SYMBOLS <temp60> LIKE LINE OF ls_action-t_arg.
+      DATA temp61 LIKE sy-tabix.
+    DATA lv_target LIKE ls_action-name.
+    DATA lv_offset TYPE i.
+    DATA lv_method TYPE string.
+    DATA lv_text TYPE string.
+    DATA lv_opt TYPE string.
+        DATA temp62 TYPE REF TO z2ui5_if_ajson.
+        DATA lo_opt LIKE temp62.
+        DATA temp63 TYPE string.
+    CLEAR temp59.
+    temp59-t_arg = json_args( resp = resp path = path ).
+
+    ls_action = temp59.
     TRY.
         ls_action-json = resp->slice( path )->stringify( ).
       CATCH cx_root ##NO_HANDLER.
     ENDTRY.
     IF ls_action-t_arg IS NOT INITIAL.
-      ls_action-name = ls_action-t_arg[ 1 ].
+
+
+      temp61 = sy-tabix.
+      READ TABLE ls_action-t_arg INDEX 1 ASSIGNING <temp60>.
+      sy-tabix = temp61.
+      IF sy-subrc <> 0.
+        ASSERT 1 = 0.
+      ENDIF.
+      ls_action-name = <temp60>.
       DELETE ls_action-t_arg INDEX 1.
     ENDIF.
     INSERT ls_action INTO TABLE mt_action.
@@ -1507,27 +1702,42 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     " the whitelisted global calls - written by the framework directly
     " ([ MESSAGE_TOAST, show, text, opt? ]) or by the app through
     " cs_event-control_global ([ CONTROL_GLOBAL, MESSAGE_BOX, error, ... ])
-    DATA(lv_target) = ls_action-name.
-    DATA(lv_offset) = 0.
+
+    lv_target = ls_action-name.
+
+    lv_offset = 0.
     IF lv_target = z2ui5_if_client=>cs_event-control_global.
       " the arguments of the global call start one position later
       lv_target = resp->get_string( |{ path }/2| ).
       lv_offset = 1.
     ENDIF.
 
-    DATA(lv_method) = resp->get_string( |{ path }/{ 2 + lv_offset }| ).
-    DATA(lv_text)   = resp->get_string( |{ path }/{ 3 + lv_offset }| ).
-    DATA(lv_opt)    = |{ path }/{ 4 + lv_offset }|.
+
+    lv_method = resp->get_string( |{ path }/{ 2 + lv_offset }| ).
+
+    lv_text   = resp->get_string( |{ path }/{ 3 + lv_offset }| ).
+
+    lv_opt    = |{ path }/{ 4 + lv_offset }|.
 
     CASE lv_target.
 
       WHEN z2ui5_if_ui5_types=>cs_global_target-message_toast
         OR z2ui5_if_ui5_types=>cs_global_target-message_box.
-        DATA(lo_opt) = COND #( WHEN resp->get_node_type( lv_opt ) = z2ui5_if_ajson_types=>node_type-object
-                               THEN resp->slice( lv_opt ) ).
-        message_add( source = COND #( WHEN lv_target = z2ui5_if_ui5_types=>cs_global_target-message_toast
-                                      THEN `toast`
-                                      ELSE `box` )
+
+        IF resp->get_node_type( lv_opt ) = z2ui5_if_ajson_types=>node_type-object.
+          temp62 = resp->slice( lv_opt ).
+        ELSE.
+          CLEAR temp62.
+        ENDIF.
+
+        lo_opt = temp62.
+
+        IF lv_target = z2ui5_if_ui5_types=>cs_global_target-message_toast.
+          temp63 = `toast`.
+        ELSE.
+          temp63 = `box`.
+        ENDIF.
+        message_add( source = temp63
                      method = lv_method
                      text   = lv_text
                      opt    = lo_opt ).
@@ -1544,10 +1754,15 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD json_args.
 
-    DATA(lv_index) = 1.
+    DATA lv_index TYPE i.
+      DATA lv_path TYPE string.
+      DATA lv_type TYPE z2ui5_if_ajson_types=>ty_node_type.
+    lv_index = 1.
     DO.
-      DATA(lv_path) = |{ path }/{ lv_index }|.
-      DATA(lv_type) = resp->get_node_type( lv_path ).
+
+      lv_path = |{ path }/{ lv_index }|.
+
+      lv_type = resp->get_node_type( lv_path ).
       IF lv_type IS INITIAL.
         EXIT.
       ENDIF.
@@ -1567,17 +1782,30 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD message_add.
 
-    DATA(ls_message) = VALUE ty_s_message( roundtrip = mv_roundtrip
-                                           source    = source
-                                           method    = to_lower( method )
-                                           text      = text ).
+    DATA temp64 TYPE ty_s_message.
+    DATA ls_message LIKE temp64.
+    DATA temp65 TYPE z2ui5_cl_frontend_sim=>ty_s_message-type.
+    CLEAR temp64.
+    temp64-roundtrip = mv_roundtrip.
+    temp64-source = source.
+    temp64-method = to_lower( method ).
+    temp64-text = text.
+
+    ls_message = temp64.
 
     " sap.m.MessageBox display methods - a toast carries no severity
-    ls_message-type = SWITCH #( ls_message-method
-                                WHEN `error`   THEN `error`
-                                WHEN `warning` THEN `warning`
-                                WHEN `success` THEN `success`
-                                ELSE `info` ).
+
+    CASE ls_message-method.
+      WHEN `error`.
+        temp65 = `error`.
+      WHEN `warning`.
+        temp65 = `warning`.
+      WHEN `success`.
+        temp65 = `success`.
+      WHEN OTHERS.
+        temp65 = `info`.
+    ENDCASE.
+    ls_message-type = temp65.
 
     IF opt IS BOUND.
       ls_message-title   = opt->get_string( `/title` ).
@@ -1589,6 +1817,8 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD layer_display.
+    DATA temp66 TYPE z2ui5_cl_frontend_sim=>ty_s_layer.
+    DATA temp7 TYPE z2ui5_cl_frontend_sim=>ty_s_layer-model.
 
     " a display REPLACES the layer (actions/Slots). A new MAIN view is a new
     " screen: the nested views die with the control tree they were inserted
@@ -1600,14 +1830,21 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     layer_destroy( layer ).
 
     " a nested view owns no model - it inherits the MAIN one (model_of_layer)
-    INSERT VALUE #( layer     = layer
-                    xml       = xml
-                    model     = COND #( WHEN layer <> z2ui5_if_client=>cs_view-nested
-                                         AND layer <> z2ui5_if_client=>cs_view-nested2
-                                        THEN model )
-                    app       = mv_app
-                    anchor_id = anchor_id
-                    roundtrip = mv_roundtrip ) INTO TABLE mt_layer.
+
+    CLEAR temp66.
+    temp66-layer = layer.
+    temp66-xml = xml.
+
+    IF layer <> z2ui5_if_client=>cs_view-nested AND layer <> z2ui5_if_client=>cs_view-nested2.
+      temp7 = model.
+    ELSE.
+      CLEAR temp7.
+    ENDIF.
+    temp66-model = temp7.
+    temp66-app = mv_app.
+    temp66-anchor_id = anchor_id.
+    temp66-roundtrip = mv_roundtrip.
+    INSERT temp66 INTO TABLE mt_layer.
 
   ENDMETHOD.
 
@@ -1625,10 +1862,22 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD layer_top.
 
-    LOOP AT VALUE string_table( ( z2ui5_if_client=>cs_view-popover )
-                                ( z2ui5_if_client=>cs_view-popup )
-                                ( z2ui5_if_client=>cs_view-main ) ) INTO DATA(lv_layer).
-      IF line_exists( mt_layer[ layer = lv_layer ] ). "#EC CI_SORTSEQ
+    DATA temp8 TYPE string_table.
+    DATA temp67 LIKE temp8.
+    DATA lv_layer LIKE LINE OF temp67.
+      DATA temp68 LIKE sy-subrc.
+    CLEAR temp8.
+    INSERT z2ui5_if_client=>cs_view-popover INTO TABLE temp8.
+    INSERT z2ui5_if_client=>cs_view-popup INTO TABLE temp8.
+    INSERT z2ui5_if_client=>cs_view-main INTO TABLE temp8.
+
+    temp67 = temp8.
+
+    LOOP AT temp67 INTO lv_layer.
+
+      READ TABLE mt_layer WITH KEY layer = lv_layer TRANSPORTING NO FIELDS.
+      temp68 = sy-subrc.
+      IF temp68 = 0. "#EC CI_SORTSEQ
         result = lv_layer.
         RETURN.
       ENDIF.
@@ -1652,11 +1901,14 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD model_of_layer.
 
-    DATA(lv_layer) = layer.
+    DATA lv_layer LIKE layer.
+    DATA ls_layer TYPE z2ui5_cl_frontend_sim=>ty_s_layer.
+    lv_layer = layer.
     IF lv_layer = z2ui5_if_client=>cs_view-nested OR lv_layer = z2ui5_if_client=>cs_view-nested2.
       lv_layer = z2ui5_if_client=>cs_view-main.
     ENDIF.
-    READ TABLE mt_layer INTO DATA(ls_layer) WITH KEY layer = lv_layer. "#EC CI_SORTSEQ
+
+    READ TABLE mt_layer INTO ls_layer WITH KEY layer = lv_layer. "#EC CI_SORTSEQ
     IF sy-subrc = 0.
       result = ls_layer-model.
     ENDIF.
@@ -1672,20 +1924,31 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     " also apply to the apostrophes
     DATA lv_name TYPE string.
 
-    DATA(lv_xml) = xml.
+    DATA lv_xml LIKE xml.
+    DATA lv_len TYPE i.
+    DATA lv_off TYPE i.
+      DATA lv_call TYPE i.
+      DATA lv_open TYPE i.
+      DATA lv_pos TYPE i.
+        DATA lv_char TYPE string.
+      DATA temp69 LIKE sy-subrc.
+    lv_xml = xml.
     REPLACE ALL OCCURRENCES OF `&apos;` IN lv_xml WITH `'`.
     REPLACE ALL OCCURRENCES OF `&quot;` IN lv_xml WITH `"`.
     REPLACE ALL OCCURRENCES OF `&lt;` IN lv_xml WITH `<`.
     REPLACE ALL OCCURRENCES OF `&gt;` IN lv_xml WITH `>`.
     REPLACE ALL OCCURRENCES OF `&amp;` IN lv_xml WITH `&`.
 
-    DATA(lv_len) = strlen( lv_xml ).
-    DATA(lv_off) = 0.
+
+    lv_len = strlen( lv_xml ).
+
+    lv_off = 0.
     DO.
       IF lv_off >= lv_len.
         EXIT.
       ENDIF.
-      DATA(lv_call) = find( val = lv_xml
+
+      lv_call = find( val = lv_xml
                             sub = `.eB`
                             off = lv_off ).
       IF lv_call < 0.
@@ -1694,7 +1957,8 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
       " .eB(['NAME' - the array opens right behind the parenthesis.
       " .eBP($event,cond,['NAME' - behind the two leading arguments, and
       " the condition may be an expression with parentheses of its own
-      DATA(lv_open) = find( val = lv_xml
+
+      lv_open = find( val = lv_xml
                             sub = `['`
                             off = lv_call ).
       IF lv_open < 0.
@@ -1706,9 +1970,11 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
       ENDIF.
 
       CLEAR lv_name.
-      DATA(lv_pos) = lv_open + 2.
+
+      lv_pos = lv_open + 2.
       WHILE lv_pos < lv_len.
-        DATA(lv_char) = substring( val = lv_xml
+
+        lv_char = substring( val = lv_xml
                                    off = lv_pos
                                    len = 1 ).
         IF lv_char = `\` AND lv_pos + 1 < lv_len.
@@ -1724,7 +1990,10 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
         lv_pos = lv_pos + 1.
       ENDWHILE.
 
-      IF lv_name IS NOT INITIAL AND NOT line_exists( ct_event[ table_line = lv_name ] ). "#EC CI_SORTSEQ
+
+      READ TABLE ct_event WITH KEY table_line = lv_name TRANSPORTING NO FIELDS.
+      temp69 = sy-subrc.
+      IF lv_name IS NOT INITIAL AND NOT temp69 = 0. "#EC CI_SORTSEQ
         INSERT lv_name INTO TABLE ct_event.
       ENDIF.
       lv_off = lv_pos + 1.
@@ -1735,9 +2004,18 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   METHOD check_event_exists.
 
     DATA lv_event TYPE string.
+    DATA lt_event TYPE string_table.
+    DATA temp70 LIKE sy-subrc.
+    DATA temp2 TYPE xsdboolean.
     lv_event = event.
-    DATA(lt_event) = get_events( layer ).
-    result = xsdbool( line_exists( lt_event[ table_line = lv_event ] ) ). "#EC CI_SORTSEQ
+
+    lt_event = get_events( layer ).
+
+    READ TABLE lt_event WITH KEY table_line = lv_event TRANSPORTING NO FIELDS.
+    temp70 = sy-subrc.
+
+    temp2 = boolc( temp70 = 0 ).
+    result = temp2. "#EC CI_SORTSEQ
 
   ENDMETHOD.
 
@@ -1746,22 +2024,46 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     " a dialog is modal and a popover sits on top of whatever opened it: the
     " user reaches the topmost layer only. The MAIN view comes with the
     " nested views inserted into it
-    DATA(lv_top) = COND string( WHEN layer IS INITIAL THEN layer_top( ) ELSE layer_check( layer ) ).
+    DATA temp71 TYPE string.
+    DATA lv_top LIKE temp71.
+    DATA temp72 TYPE string_table.
+    DATA temp10 TYPE string_table.
+    DATA temp1 TYPE string_table.
+    IF layer IS INITIAL.
+      temp71 = layer_top( ).
+    ELSE.
+      temp71 = layer_check( layer ).
+    ENDIF.
+
+    lv_top = temp71.
     IF lv_top = z2ui5_if_client=>cs_view-nested OR lv_top = z2ui5_if_client=>cs_view-nested2.
       lv_top = z2ui5_if_client=>cs_view-main.
     ENDIF.
-    result = COND string_table(
-        WHEN lv_top = z2ui5_if_client=>cs_view-main
-        THEN VALUE #( ( z2ui5_if_client=>cs_view-main )
-                      ( z2ui5_if_client=>cs_view-nested )
-                      ( z2ui5_if_client=>cs_view-nested2 ) )
-        ELSE VALUE #( ( lv_top ) ) ).
+
+    CLEAR temp72.
+    INSERT z2ui5_if_client=>cs_view-main INTO TABLE temp72.
+    INSERT z2ui5_if_client=>cs_view-nested INTO TABLE temp72.
+    INSERT z2ui5_if_client=>cs_view-nested2 INTO TABLE temp72.
+
+    CLEAR temp10.
+    INSERT lv_top INTO TABLE temp10.
+
+    IF lv_top = z2ui5_if_client=>cs_view-main.
+      temp1 = temp72.
+    ELSE.
+      temp1 = temp10.
+    ENDIF.
+    result = temp1.
 
   ENDMETHOD.
 
   METHOD get_events.
 
-    LOOP AT layers_of_active( layer ) INTO DATA(lv_layer).
+    DATA temp74 TYPE string_table.
+    DATA lv_layer LIKE LINE OF temp74.
+    temp74 = layers_of_active( layer ).
+
+    LOOP AT temp74 INTO lv_layer.
       events_of_xml( EXPORTING xml      = layer_read( lv_layer )-xml
                      CHANGING  ct_event = result ).
     ENDLOOP.
@@ -1770,7 +2072,11 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD get_ids.
 
-    LOOP AT layers_of_active( layer ) INTO DATA(lv_layer).
+    DATA temp75 TYPE string_table.
+    DATA lv_layer LIKE LINE OF temp75.
+    temp75 = layers_of_active( layer ).
+
+    LOOP AT temp75 INTO lv_layer.
       ids_of_xml( EXPORTING xml   = layer_read( lv_layer )-xml
                   CHANGING  ct_id = result ).
     ENDLOOP.
@@ -1780,9 +2086,18 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   METHOD check_id_exists.
 
     DATA lv_id TYPE string.
+    DATA lt_id TYPE string_table.
+    DATA temp76 LIKE sy-subrc.
+    DATA temp3 TYPE xsdboolean.
     lv_id = id.
-    DATA(lt_id) = get_ids( layer ).
-    result = xsdbool( line_exists( lt_id[ table_line = lv_id ] ) ). "#EC CI_SORTSEQ
+
+    lt_id = get_ids( layer ).
+
+    READ TABLE lt_id WITH KEY table_line = lv_id TRANSPORTING NO FIELDS.
+    temp76 = sy-subrc.
+
+    temp3 = boolc( temp76 = 0 ).
+    result = temp3. "#EC CI_SORTSEQ
 
   ENDMETHOD.
 
@@ -1793,30 +2108,45 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     " attribute is read off the XML text, not a DOM: a view is one long
     " line, and the attribute always starts with a blank before its name,
     " which keeps `width="..."` or `tooltipId="..."` out
-    DATA(lv_len) = strlen( xml ).
-    DATA(lv_off) = 0.
+    DATA lv_len TYPE i.
+    DATA lv_off TYPE i.
+      DATA lv_attr TYPE i.
+      DATA lv_start TYPE i.
+      DATA lv_end TYPE i.
+      DATA lv_id TYPE string.
+      DATA temp77 LIKE sy-subrc.
+    lv_len = strlen( xml ).
+
+    lv_off = 0.
     DO.
       IF lv_off >= lv_len.
         EXIT.
       ENDIF.
-      DATA(lv_attr) = find( val = xml
+
+      lv_attr = find( val = xml
                             sub = ` id="`
                             off = lv_off ).
       IF lv_attr < 0.
         EXIT.
       ENDIF.
-      DATA(lv_start) = lv_attr + 5.
-      DATA(lv_end) = find( val = xml
+
+      lv_start = lv_attr + 5.
+
+      lv_end = find( val = xml
                            sub = `"`
                            off = lv_start ).
       IF lv_end < 0.
         EXIT.
       ENDIF.
-      DATA(lv_id) = substring( val = xml
+
+      lv_id = substring( val = xml
                                off = lv_start
                                len = lv_end - lv_start ).
       REPLACE ALL OCCURRENCES OF `&amp;` IN lv_id WITH `&`.
-      IF lv_id IS NOT INITIAL AND NOT line_exists( ct_id[ table_line = lv_id ] ). "#EC CI_SORTSEQ
+
+      READ TABLE ct_id WITH KEY table_line = lv_id TRANSPORTING NO FIELDS.
+      temp77 = sy-subrc.
+      IF lv_id IS NOT INITIAL AND NOT temp77 = 0. "#EC CI_SORTSEQ
         INSERT lv_id INTO TABLE ct_id.
       ENDIF.
       lv_off = lv_end + 1.
@@ -1826,7 +2156,13 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD get_view.
 
-    result = layer_read( COND #( WHEN layer IS SUPPLIED THEN layer ELSE layer_top( ) ) )-xml.
+    DATA temp78 TYPE string.
+    IF layer IS SUPPLIED.
+      temp78 = layer.
+    ELSE.
+      temp78 = layer_top( ).
+    ENDIF.
+    result = layer_read( temp78 )-xml.
 
   ENDMETHOD.
 
@@ -1844,12 +2180,22 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD get_layers.
 
-    LOOP AT VALUE string_table( ( z2ui5_if_client=>cs_view-main )
-                                ( z2ui5_if_client=>cs_view-nested )
-                                ( z2ui5_if_client=>cs_view-nested2 )
-                                ( z2ui5_if_client=>cs_view-popup )
-                                ( z2ui5_if_client=>cs_view-popover ) ) INTO DATA(lv_layer).
-      DATA(ls_layer) = layer_read( lv_layer ).
+    DATA temp12 TYPE string_table.
+    DATA temp79 LIKE temp12.
+    DATA lv_layer LIKE LINE OF temp79.
+      DATA ls_layer TYPE z2ui5_cl_frontend_sim=>ty_s_layer.
+    CLEAR temp12.
+    INSERT z2ui5_if_client=>cs_view-main INTO TABLE temp12.
+    INSERT z2ui5_if_client=>cs_view-nested INTO TABLE temp12.
+    INSERT z2ui5_if_client=>cs_view-nested2 INTO TABLE temp12.
+    INSERT z2ui5_if_client=>cs_view-popup INTO TABLE temp12.
+    INSERT z2ui5_if_client=>cs_view-popover INTO TABLE temp12.
+
+    temp79 = temp12.
+
+    LOOP AT temp79 INTO lv_layer.
+
+      ls_layer = layer_read( lv_layer ).
       IF ls_layer-layer IS NOT INITIAL.
         INSERT ls_layer INTO TABLE result.
       ENDIF.
@@ -1859,8 +2205,20 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD get_model.
 
-    DATA(lv_layer) = COND string( WHEN layer IS SUPPLIED THEN to_upper( layer ) ELSE layer_top( ) ).
-    IF lv_layer IS NOT INITIAL AND line_exists( mt_layer[ layer = lv_layer ] ). "#EC CI_SORTSEQ
+    DATA temp80 TYPE string.
+    DATA lv_layer LIKE temp80.
+    DATA temp81 LIKE sy-subrc.
+    IF layer IS SUPPLIED.
+      temp80 = to_upper( layer ).
+    ELSE.
+      temp80 = layer_top( ).
+    ENDIF.
+
+    lv_layer = temp80.
+
+    READ TABLE mt_layer WITH KEY layer = lv_layer TRANSPORTING NO FIELDS.
+    temp81 = sy-subrc.
+    IF lv_layer IS NOT INITIAL AND temp81 = 0. "#EC CI_SORTSEQ
       result = model_of_layer( lv_layer ).
     ELSEIF layer IS NOT SUPPLIED.
       result = mv_model_last.
@@ -1870,17 +2228,36 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   METHOD get_value.
 
-    DATA(lv_path) = conv_name_to_path( name ).
-    DATA(lt_model) = VALUE string_table( ( COND #( WHEN layer IS SUPPLIED
-                                                   THEN get_model( layer )
-                                                   ELSE get_model( ) ) ) ).
+    DATA lv_path TYPE string.
+    DATA temp82 TYPE string_table.
+    DATA temp14 TYPE string.
+    DATA lt_model LIKE temp82.
+    DATA lv_model LIKE LINE OF lt_model.
+          DATA temp84 TYPE REF TO z2ui5_if_ajson.
+          DATA lo_model LIKE temp84.
+    lv_path = conv_name_to_path( name ).
+
+    CLEAR temp82.
+
+    IF layer IS SUPPLIED.
+      temp14 = get_model( layer ).
+    ELSE.
+      temp14 = get_model( ).
+    ENDIF.
+    INSERT temp14 INTO TABLE temp82.
+
+    lt_model = temp82.
     IF layer IS NOT SUPPLIED.
       INSERT mv_model_last INTO TABLE lt_model.
     ENDIF.
 
-    LOOP AT lt_model INTO DATA(lv_model) WHERE table_line IS NOT INITIAL.
+
+    LOOP AT lt_model INTO lv_model WHERE table_line IS NOT INITIAL.
       TRY.
-          DATA(lo_model) = CAST z2ui5_if_ajson( z2ui5_cl_ajson=>parse( lv_model ) ).
+
+          temp84 ?= z2ui5_cl_ajson=>parse( lv_model ).
+
+          lo_model = temp84.
           IF lo_model->exists( lv_path ) = abap_true.
             result = lo_model->get_string( lv_path ).
             RETURN.
@@ -1897,7 +2274,8 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     " READ TABLE, not a table expression in the condition: the 7.02 downport
     " hoists the expression in front of the IF, where the guard no longer
     " protects it from an empty table
-    READ TABLE mt_message INTO DATA(ls_message) INDEX lines( mt_message ).
+    DATA ls_message TYPE z2ui5_cl_frontend_sim=>ty_s_message.
+    READ TABLE mt_message INTO ls_message INDEX lines( mt_message ).
     IF sy-subrc = 0 AND ls_message-roundtrip = mv_roundtrip.
       result = ls_message-text.
     ENDIF.
@@ -1905,13 +2283,15 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_messages.
+    DATA ls_message LIKE LINE OF mt_message.
 
     IF only_last = abap_false.
       result = mt_message.
       RETURN.
     ENDIF.
 
-    LOOP AT mt_message INTO DATA(ls_message) WHERE roundtrip = mv_roundtrip. "#EC CI_SORTSEQ
+
+    LOOP AT mt_message INTO ls_message WHERE roundtrip = mv_roundtrip. "#EC CI_SORTSEQ
       INSERT ls_message INTO TABLE result.
     ENDLOOP.
 
@@ -1934,23 +2314,37 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD is_sticky.
-    result = xsdbool( mo_handler IS BOUND ).
+    DATA temp4 TYPE xsdboolean.
+    temp4 = boolc( mo_handler IS BOUND ).
+    result = temp4.
   ENDMETHOD.
 
   METHOD get_state.
 
-    DATA(ls_state) = VALUE ty_s_state( version    = 1
-                                       id         = mv_id
-                                       app        = mv_app
-                                       routing    = ms_nav-routing
-                                       model_last = mv_model_last
-                                       t_layer    = mt_layer ).
+    DATA temp85 TYPE ty_s_state.
+    DATA ls_state LIKE temp85.
+        DATA temp86 TYPE REF TO z2ui5_if_ajson.
+        DATA lo_json LIKE temp86.
+        DATA lx TYPE REF TO cx_root.
+    CLEAR temp85.
+    temp85-version = 1.
+    temp85-id = mv_id.
+    temp85-app = mv_app.
+    temp85-routing = ms_nav-routing.
+    temp85-model_last = mv_model_last.
+    temp85-t_layer = mt_layer.
+
+    ls_state = temp85.
     TRY.
-        DATA(lo_json) = CAST z2ui5_if_ajson( z2ui5_cl_ajson=>create_empty( ) ).
+
+        temp86 ?= z2ui5_cl_ajson=>create_empty( ).
+
+        lo_json = temp86.
         lo_json->set( iv_path = `/`
                       iv_val  = ls_state ).
         result = lo_json->stringify( ).
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         RAISE EXCEPTION TYPE z2ui5_cx_ui5_util_error EXPORTING val = lx.
     ENDTRY.
 
