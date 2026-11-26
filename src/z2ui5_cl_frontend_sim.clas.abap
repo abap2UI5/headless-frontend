@@ -39,7 +39,7 @@ CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
     "! The wire protocol this simulator reads (S_FRONT.PROTOCOL of the
     "! response, z2ui5_if_ui5_types=&gt;c_protocol in the core). A response
     "! that names another one is refused, as the frontend refuses it.
-    CONSTANTS c_protocol TYPE i VALUE 2.
+    CONSTANTS c_protocol TYPE i VALUE 3.
 
     TYPES:
       "! One message the frontend would have shown - a toast or a message box.
@@ -92,7 +92,7 @@ CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
     TYPES:
       "! The browser-history intent - read-only, nothing is navigated. All
       "! fields but routing describe the LAST response only: the options of its
-      "! ROUTER/sync action (empty when it carried no nav intent) and whether
+      "! S_FRONT.NAV section (empty when it carried no nav intent) and whether
       "! its MAIN display played as a way back. routing is the hash-routing
       "! mode the frontend currently holds (KEEP / FRESH / DEFAULT, empty for
       "! none), kept across roundtrips the way the frontend keeps it.
@@ -281,12 +281,16 @@ CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
     "! @parameter event  | Event id as registered via client->_event( ).
     "! @parameter t_arg  | Optional event arguments (client->get_event_arg( )).
     "! @parameter layer  | Optional: the layer whose view fires it (default: the topmost open one).
+    "! @parameter timer  | abap_true: the event is the tick of a START_TIMER follow-up action, not a
+    "!                     click - sent with S_FRONT.TIMER, as the frontend marks a tick. A tick that
+    "!                     leaves the app unchanged is answered with the draft id it continued.
     "! @parameter result | The simulator instance (for fluent chaining).
     METHODS click
       IMPORTING
         event         TYPE clike
         t_arg         TYPE string_table OPTIONAL
         layer         TYPE clike        OPTIONAL
+        timer         TYPE abap_bool    DEFAULT abap_false
       RETURNING
         VALUE(result) TYPE REF TO z2ui5_cl_frontend_sim.
 
@@ -522,19 +526,28 @@ CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
     DATA mv_resp_json    TYPE string.
     DATA mv_req_json     TYPE string.
 
+    "! One roundtrip. route_app / route_draft are S_FRONT.ROUTE of an app
+    "! start - what the frontend's router parsed out of the hash; timer marks
+    "! the tick of a START_TIMER (S_FRONT.TIMER).
     METHODS roundtrip
       IMPORTING
-        event  TYPE clike        OPTIONAL
-        search TYPE clike        OPTIONAL
-        hash   TYPE clike        OPTIONAL
-        t_arg  TYPE string_table OPTIONAL
-        model  TYPE string       DEFAULT z2ui5_if_client=>cs_view-main.
+        event       TYPE clike        OPTIONAL
+        search      TYPE clike        OPTIONAL
+        hash        TYPE clike        OPTIONAL
+        route_app   TYPE clike        OPTIONAL
+        route_draft TYPE clike        OPTIONAL
+        timer       TYPE abap_bool    DEFAULT abap_false
+        t_arg       TYPE string_table OPTIONAL
+        model       TYPE string       DEFAULT z2ui5_if_client=>cs_view-main.
 
     METHODS build_request
       IMPORTING
         event         TYPE clike        OPTIONAL
         search        TYPE clike        OPTIONAL
         hash          TYPE clike        OPTIONAL
+        route_app     TYPE clike        OPTIONAL
+        route_draft   TYPE clike        OPTIONAL
+        timer         TYPE abap_bool    DEFAULT abap_false
         t_arg         TYPE string_table OPTIONAL
         delta         TYPE REF TO z2ui5_if_ajson OPTIONAL
       RETURNING
@@ -613,10 +626,10 @@ CLASS z2ui5_cl_frontend_sim DEFINITION PUBLIC FINAL CREATE PRIVATE.
       IMPORTING
         json TYPE string.
 
-    METHODS parse_system_action
+    METHODS parse_view
       IMPORTING
         resp  TYPE REF TO z2ui5_if_ajson
-        path  TYPE string
+        slot  TYPE string
         model TYPE string.
 
     METHODS parse_custom_action
@@ -744,11 +757,14 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
           EXPORTING val = |RESUME_NO_APP - the app class of draft { lv_id } is unknown, it cannot be refreshed|.
       ENDIF.
       " the request a browser reload sends for a routed app: no id, the
-      " route #/app/<class>/<draft> in the hash - the backend restores the
-      " draft (z2ui5_cl_ui5_action=>factory_first_start) and runs main( )
-      " with check_on_navigated( ) set
+      " route #/app/<class>/<draft> in the hash, and what the frontend's
+      " router parsed out of it as S_FRONT.ROUTE - the backend restores the
+      " draft from the route (z2ui5_cl_ui5_action=>factory_first_start) and
+      " runs main( ) with check_on_navigated( ) set
       CLEAR result->mv_id.
-      result->roundtrip( hash = |#/app/{ result->mv_app }/{ lv_id }| ).
+      result->roundtrip( hash        = |#/app/{ result->mv_app }/{ lv_id }|
+                         route_app   = result->mv_app
+                         route_draft = lv_id ).
     ENDIF.
 
   ENDMETHOD.
@@ -918,6 +934,7 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
     roundtrip( event = event
                t_arg = t_arg
+               timer = timer
                model = lv_model ).
     result = me.
 
@@ -1221,11 +1238,14 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
     delta_build( EXPORTING model = model
                  IMPORTING delta = DATA(lo_delta)
                            data  = DATA(lv_data) ).
-    DATA(lv_request) = build_request( event  = event
-                                      search = search
-                                      hash   = hash
-                                      t_arg  = t_arg
-                                      delta  = lo_delta ).
+    DATA(lv_request) = build_request( event       = event
+                                      search      = search
+                                      hash        = hash
+                                      route_app   = route_app
+                                      route_draft = route_draft
+                                      timer       = timer
+                                      t_arg       = t_arg
+                                      delta       = lo_delta ).
     mv_req_json = lv_request.
 
     " Reuse the handler for sticky apps, create a fresh one otherwise -
@@ -1316,6 +1336,22 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
                        iv_val  = hash ).
         ENDIF.
 
+        " the route travels only with an app start - a request that
+        " continues a draft names none (Server.js roundtrip)
+        IF mv_id IS INITIAL AND route_app IS NOT INITIAL.
+          lo_req->set( iv_path = `/value/S_FRONT/ROUTE/APP`
+                       iv_val  = route_app ).
+          IF route_draft IS NOT INITIAL.
+            lo_req->set( iv_path = `/value/S_FRONT/ROUTE/DRAFT`
+                         iv_val  = route_draft ).
+          ENDIF.
+        ENDIF.
+
+        IF timer = abap_true AND event IS NOT INITIAL.
+          lo_req->set_boolean( iv_path = `/value/S_FRONT/TIMER`
+                               iv_val  = abap_true ).
+        ENDIF.
+
         IF t_arg IS NOT INITIAL.
           lo_req->set( iv_path = `/value/S_FRONT/T_EVENT_ARG`
                        iv_val  = t_arg ).
@@ -1361,14 +1397,11 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
     mv_id = lo_resp->get_string( `/S_FRONT/ID` ).
 
-    " An APP SWITCH kills the two standalone layers - they live outside the
-    " MAIN control tree, and the switch is visible here because the response
-    " names its app (View1 _processAfterRendering, before the system actions)
+    " The class that answered. An app switch does not take the standalone
+    " layers down here: the backend says so itself, as the teardown of POPUP
+    " and POPOVER in VIEWS (protocol 3) - it also sees a hop to another
+    " instance of the same class, which the class name does not show
     DATA(lv_app) = lo_resp->get_string( `/S_FRONT/APP` ).
-    IF lv_app IS NOT INITIAL AND mv_app IS NOT INITIAL AND lv_app <> mv_app.
-      layer_destroy( z2ui5_if_client=>cs_view-popup ).
-      layer_destroy( z2ui5_if_client=>cs_view-popover ).
-    ENDIF.
     IF lv_app IS NOT INITIAL.
       mv_app = lv_app.
     ENDIF.
@@ -1386,18 +1419,18 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
       mv_model_last = lv_model.
     ENDIF.
 
-    " Phase 1: the SYSTEM actions - view lifecycle and history - in order
-    DATA(lv_index) = 1.
-    DO.
-      DATA(lv_path) = |/S_FRONT/S_ACTION/T_SYSTEM/{ lv_index }|.
-      IF lo_resp->exists( lv_path ) = abap_false.
-        EXIT.
-      ENDIF.
-      parse_system_action( resp  = lo_resp
-                           path  = lv_path
-                           model = lv_model ).
-      lv_index = lv_index + 1.
-    ENDDO.
+    " Phase 1: VIEWS - one entry per slot the response changes, applied in
+    " slot order whatever order the keys came in (View1 _applyViews): a
+    " nested view goes into MAIN, and a popup opens over the new screen
+    LOOP AT VALUE string_table( ( z2ui5_if_client=>cs_view-main )
+                                ( z2ui5_if_client=>cs_view-nested )
+                                ( z2ui5_if_client=>cs_view-nested2 )
+                                ( z2ui5_if_client=>cs_view-popup )
+                                ( z2ui5_if_client=>cs_view-popover ) ) INTO DATA(lv_slot).
+      parse_view( resp  = lo_resp
+                  slot  = lv_slot
+                  model = lv_model ).
+    ENDLOOP.
 
     " A MODEL key IS the model push: into every open layer that owns a model
     " and belongs to the app that answered (Slots updateModelIfRequired) -
@@ -1414,10 +1447,16 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
       ENDLOOP.
     ENDIF.
 
-    " Phase 2: the APP actions - what the app queued, run after rendering
-    lv_index = 1.
+    " Phase 2: NAV - the URL intent, one options object (Router.sync)
+    IF lo_resp->exists( `/S_FRONT/NAV` ) = abap_true.
+      parse_nav( resp = lo_resp
+                 path = `/S_FRONT/NAV` ).
+    ENDIF.
+
+    " Phase 3: ACTIONS - what the app queued, run after rendering
+    DATA(lv_index) = 1.
     DO.
-      lv_path = |/S_FRONT/S_ACTION/T_CUSTOM/{ lv_index }|.
+      DATA(lv_path) = |/S_FRONT/ACTIONS/{ lv_index }|.
       IF lo_resp->exists( lv_path ) = abap_false.
         EXIT.
       ENDIF.
@@ -1428,47 +1467,40 @@ CLASS z2ui5_cl_frontend_sim IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD parse_system_action.
+  METHOD parse_view.
 
-    " [ VIEW_SLOTS, display, slot, xml, opt? ], [ VIEW_SLOTS, destroy, slot ]
-    " and [ ROUTER, sync, opt ] - see z2ui5_cl_ui5_frontend
-    CASE resp->get_string( |{ path }/1| ).
+    " { XML, OPT? } displays a view into the slot, { DESTROY: true } takes
+    " it down - see z2ui5_cl_ui5_frontend=>slots_serialize
+    DATA(lv_path) = |/S_FRONT/VIEWS/{ slot }|.
+    IF resp->exists( lv_path ) = abap_false.
+      RETURN.
+    ENDIF.
 
-      WHEN z2ui5_if_ui5_types=>cs_slot_action-target.
-        DATA(lv_method) = resp->get_string( |{ path }/2| ).
-        DATA(lv_layer)  = resp->get_string( |{ path }/3| ).
+    IF resp->get_boolean( |{ lv_path }/DESTROY| ) = abap_true.
+      layer_destroy( slot ).
+      RETURN.
+    ENDIF.
 
-        IF lv_method = z2ui5_if_ui5_types=>cs_slot_action-destroy.
-          layer_destroy( lv_layer ).
-          RETURN.
-        ENDIF.
+    IF resp->exists( |{ lv_path }/XML| ) = abap_false.
+      RETURN.
+    ENDIF.
 
-        IF lv_method <> z2ui5_if_ui5_types=>cs_slot_action-display.
-          RETURN.
-        ENDIF.
+    DATA(lv_opt) = |{ lv_path }/OPT|.
+    DATA(lv_anchor) = resp->get_string( |{ lv_opt }/openById| ).
+    IF lv_anchor IS INITIAL.
+      lv_anchor = resp->get_string( |{ lv_opt }/id| ).
+    ENDIF.
 
-        DATA(lv_opt) = |{ path }/5|.
-        DATA(lv_anchor) = resp->get_string( |{ lv_opt }/openById| ).
-        IF lv_anchor IS INITIAL.
-          lv_anchor = resp->get_string( |{ lv_opt }/id| ).
-        ENDIF.
+    IF slot = z2ui5_if_client=>cs_view-main.
+      ms_nav-nav_back   = xsdbool( resp->get_boolean( |{ lv_opt }/navBack| ) = abap_true
+                                OR resp->get_boolean( |{ lv_opt }/transitionBack| ) = abap_true ).
+      ms_nav-transition = resp->get_string( |{ lv_opt }/transition| ).
+    ENDIF.
 
-        IF lv_layer = z2ui5_if_client=>cs_view-main.
-          ms_nav-nav_back   = xsdbool( resp->get_boolean( |{ lv_opt }/navBack| ) = abap_true
-                                    OR resp->get_boolean( |{ lv_opt }/transitionBack| ) = abap_true ).
-          ms_nav-transition = resp->get_string( |{ lv_opt }/transition| ).
-        ENDIF.
-
-        layer_display( layer     = lv_layer
-                       xml       = resp->get_string( |{ path }/4| )
-                       model     = model
-                       anchor_id = lv_anchor ).
-
-      WHEN z2ui5_if_ui5_types=>cs_global_target-router.
-        parse_nav( resp = resp
-                   path = |{ path }/3| ).
-
-    ENDCASE.
+    layer_display( layer     = slot
+                   xml       = resp->get_string( |{ lv_path }/XML| )
+                   model     = model
+                   anchor_id = lv_anchor ).
 
   ENDMETHOD.
 

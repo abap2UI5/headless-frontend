@@ -78,7 +78,7 @@ See [ROADMAP.md](ROADMAP.md) for where it goes from here.
 | `set_row( table row json layer )` | Queue several cells of one row from a JSON object (`{"QTY":3,"NAME":"Pen"}`), one row delta |
 | `select_row( table row column selected layer )` | Select / deselect a row — a boolean in the column its items bind `selected` to |
 | `close_layer( layer )` | Close a layer in the browser only (`_event_client( cs_event-popup_close )`) — no roundtrip |
-| `click( event t_arg layer )` | Fire an event, send the pending edits of the firing layer's model, replay the response |
+| `click( event t_arg layer timer )` | Fire an event, send the pending edits of the firing layer's model, replay the response; `timer = abap_true` sends it as the tick of a `START_TIMER` (`S_FRONT.TIMER`) |
 | `set_check_events( val )` | Opt in: `click( )` raises for an event that is not wired in the firing layer |
 
 `layer` is optional everywhere: an edit goes into, and an event is fired from,
@@ -283,8 +283,9 @@ apps and the form app. They double as the usage documentation:
 
 Install with [abapGit](https://abapgit.org). Requires
 [abap2UI5](https://github.com/abap2UI5/abap2UI5) in the same system, at a
-version that speaks wire protocol 2 (`S_FRONT.S_ACTION`) — a response that
-names another protocol is refused with `PROTOCOL_MISMATCH`. Runs on ABAP
+version that speaks wire protocol 3 (1.151.0 on: the response sections
+`S_FRONT.VIEWS`, `NAV` and `ACTIONS`) — a response that names another protocol
+is refused with `PROTOCOL_MISMATCH`. Runs on ABAP
 Standard, ABAP Cloud and 7.02: on 7.02 - 7.40 install the branch `702`, which
 `publish-702` downports from `main` on every push (with abap2UI5 from its
 `702` branch).

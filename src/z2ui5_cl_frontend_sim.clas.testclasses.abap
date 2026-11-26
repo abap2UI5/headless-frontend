@@ -62,6 +62,14 @@ CLASS ltd_draft_store IMPLEMENTATION.
     " nothing expires within a test
   ENDMETHOD.
 
+  METHOD z2ui5_if_ui5_draft_store~prune_chain.
+    " every draft is kept - a test may resume any of them
+  ENDMETHOD.
+
+  METHOD z2ui5_if_ui5_draft_store~touch.
+    " nothing expires within a test, so there is no age to renew
+  ENDMETHOD.
+
 ENDCLASS.
 
 
@@ -109,6 +117,7 @@ CLASS ltcl_frontend_simulator DEFINITION FINAL
     METHODS edits_per_layer           FOR TESTING.
     METHODS close_layer_locally       FOR TESTING.
     METHODS typed_errors              FOR TESTING.
+    METHODS timer_tick                FOR TESTING.
 
     "! The model delta of the last request as JSON - empty when it carried none.
     METHODS model_sent
@@ -629,6 +638,38 @@ CLASS ltcl_frontend_simulator IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = `Reload`
                                         act = lo_sim->get_value( `MV_NAME` ) ).
     cl_abap_unit_assert=>assert_initial( lo_sim->get_message( ) ).
+
+
+    " the route travels parsed, as the frontend's router sends it
+    DATA(lv_request) = lo_sim->get_request_json( ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lv_request CS `"ROUTE":{"APP":"Z2UI5_CL_FRONTEND_EXAMPLE","DRAFT":"` && lv_id && `"}` ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lv_request CS `"HASH":"#/app/Z2UI5_CL_FRONTEND_EXAMPLE/` && lv_id && `"` ) ).
+
+  ENDMETHOD.
+
+  METHOD timer_tick.
+
+    DATA(lo_sim) = z2ui5_cl_frontend_sim=>start( `Z2UI5_CL_FRONTEND_EXAMPLE` ).
+
+    " a tick says it is one (S_FRONT.TIMER); one that leaves the app as the
+    " draft it continued is answered with that draft's id. The first tick
+    " after the start is compared with the start's draft, which still holds
+    " the first-start state - the second one finds nothing changed
+    lo_sim->click( event = `TICK`
+                   timer = abap_true ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_request_json( ) CS `"TIMER":true` ) ).
+    DATA(lv_id) = lo_sim->get_id( ).
+    lo_sim->click( event = `TICK`
+                   timer = abap_true ).
+    cl_abap_unit_assert=>assert_equals( exp = lv_id
+                                        act = lo_sim->get_id( ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lo_sim->get_view( ) CS `Greet` ) ).
+
+    " a click is no tick: unmarked, and answered with a new draft id
+    lo_sim->click( `TICK` ).
+    cl_abap_unit_assert=>assert_false( xsdbool( lo_sim->get_request_json( ) CS `"TIMER"` ) ).
+    cl_abap_unit_assert=>assert_differs( exp = lv_id
+                                         act = lo_sim->get_id( ) ).
 
   ENDMETHOD.
 
