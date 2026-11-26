@@ -5,7 +5,8 @@ there. Every stage is independently shippable; nothing later depends on
 anything later than itself.
 
 Code references point at [abap2UI5](https://github.com/abap2UI5/abap2UI5) as of
-2026-10-03 (wire protocol 2, `S_FRONT.S_ACTION`). Status markers: **done**,
+2026-10-03 (wire protocol 2, `S_FRONT.S_ACTION`); the simulator speaks wire
+protocol 3 since abap2UI5 1.151.0 (`S_FRONT.VIEWS`, `NAV`, `ACTIONS`). Status markers: **done**,
 **partly done**, **open**.
 
 ---
@@ -47,18 +48,22 @@ convenience accessor for the last message of the last roundtrip.
 
 ## Stage 1 — Protocol coverage — **done**
 
-The response is documented in `app/webapp/core/Server.js`: the view lifecycle
-travels as `VIEW_SLOTS` system actions, history as one `ROUTER/sync` action,
-everything an app queued as follow-up actions, and the model once per
-response.
+The response is specified in abap2UI5/protocol (`spec/response.md`, wire
+protocol 3 since abap2UI5 1.151.0): the view lifecycle travels as
+`S_FRONT.VIEWS` (one entry per slot - a display or a teardown), the history
+intent as the options object `S_FRONT.NAV`, everything an app queued as
+follow-up actions in `S_FRONT.ACTIONS`, and the model once per response.
+Until protocol 2 the first two were the `VIEW_SLOTS` and `ROUTER/sync`
+entries of `S_ACTION.T_SYSTEM`.
 
 ### 1.1 Popups — `POPUP`, `POPOVER` — **done**
 
 `get_popup( )`, `get_popover( )`, `get_layer( )`, and a `get_view( )` that
 returns the topmost open layer. Each standalone layer keeps its own model,
 pushed only from responses of the app that owns it — the frontend's rule
-(`actions/Slots updateModelIfRequired`). A new main view and an app switch take
-both down, as on the frontend.
+(`actions/Slots updateModelIfRequired`). A new main view takes both down, as
+on the frontend; on an app switch the backend sends their teardown in `VIEWS`
+(protocol 3).
 
 ### 1.2 Nested views — `NEST`, `NEST2` — **done**
 
@@ -68,7 +73,7 @@ destroyed with the main view.
 ### 1.3 Follow-up actions and browser state — **done**
 
 `get_actions( )` lists the follow-up actions of the last response with their
-arguments; `get_nav( )` exposes the `ROUTER/sync` options (app-state hash, push
+arguments; `get_nav( )` exposes the `S_FRONT.NAV` options (app-state hash, push
 state, hash replace, routing mode, nav-app-call bookkeeping) and whether the
 main display played as a way back. Read-only — nothing is navigated.
 
