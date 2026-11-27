@@ -20,6 +20,7 @@ a pointer at it, nothing more. Human-facing docs: [README](README.md),
 | `abaplint.jsonc`, `.github/abaplint/abap_{cloud,702}.jsonc` | the three lint configurations |
 | `.github/scripts/unit.mjs` | ABAP Unit on the transpiled abap2UI5 of `@abap2ui5/node-runtime` |
 | `.github/scripts/rename.mjs` | the namespace rename check, shared with the addons - change it everywhere or nowhere |
+| `.github/scripts/downport-fixes.mjs` | the text rewrites of `npm run auto_downport` (`syfixes`, `strip_trailing_ws`, `abaplintpathfix`) - node, not `sed -i`, so they run on BSD/macOS sed too |
 
 ## The contract it follows
 
