@@ -48,7 +48,7 @@ CLASS z2ui5_cl_frontend_example IMPLEMENTATION.
     " app is reached again (navigation, a restored draft) - see the
     " build-an-app guide of abap2UI5. Bound changes of an event roundtrip
     " reach the view through the automatic model update
-    IF client->check_on_navigated( ).
+    IF client->check_on_navigated( ) IS NOT INITIAL.
       view_display( ).
     ENDIF.
 
@@ -57,7 +57,8 @@ CLASS z2ui5_cl_frontend_example IMPLEMENTATION.
 
   METHOD view_display.
 
-    DATA(view) = z2ui5_cl_ui5_view_builder=>factory( ).
+    DATA view TYPE REF TO z2ui5_cl_ui5_view_builder.
+    view = z2ui5_cl_ui5_view_builder=>factory( ).
 
     view->ele( n = `View` ns = `mvc`
         )->a( n = `xmlns`     v = `sap.m`
